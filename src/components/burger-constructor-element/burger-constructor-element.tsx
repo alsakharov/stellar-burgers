@@ -6,7 +6,13 @@ import {
 } from '../../features/constructorItems/constructorItemsSlice';
 import { decreaseCount } from '../../features/ingredients/ingredientsSlice';
 import { BurgerConstructorElementUI } from '@ui';
-import { BurgerConstructorElementProps } from './type';
+import { TConstructorIngredientWithId } from './type';
+
+type BurgerConstructorElementProps = {
+  ingredient: TConstructorIngredientWithId;
+  index: number;
+  totalItems: number;
+};
 
 export const BurgerConstructorElement: FC<BurgerConstructorElementProps> = memo(
   ({ ingredient, index, totalItems }) => {
@@ -14,21 +20,19 @@ export const BurgerConstructorElement: FC<BurgerConstructorElementProps> = memo(
 
     const handleMoveUp = () => {
       if (index > 0) {
-        dispatch(moveIngredient({ dragIndex: index, hoverIndex: index - 1 }));
+        dispatch(moveIngredient({ fromIndex: index, toIndex: index - 1 }));
       }
     };
 
     const handleMoveDown = () => {
       if (index < totalItems - 1) {
-        dispatch(moveIngredient({ dragIndex: index, hoverIndex: index + 1 }));
+        dispatch(moveIngredient({ fromIndex: index, toIndex: index + 1 }));
       }
     };
 
     const handleClose = () => {
-      if (ingredient.id) {
-        dispatch(removeIngredient(ingredient.id));
-        dispatch(decreaseCount({ id: ingredient._id, type: ingredient.type }));
-      }
+      dispatch(removeIngredient(ingredient.uniqueId));
+      dispatch(decreaseCount({ id: ingredient._id, type: ingredient.type }));
     };
 
     return (

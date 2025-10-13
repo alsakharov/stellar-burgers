@@ -1,7 +1,8 @@
 import { FC, useMemo } from 'react';
 import { useSelector, useDispatch } from '../../services/store';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { TIngredient, TConstructorIngredient } from '../../utils/types';
+import { TIngredient } from '../../utils/types';
+import { TConstructorIngredientWithId } from '../burger-constructor-element/type';
 import { BurgerConstructorUI } from '@ui';
 import { createOrder, closeOrderModal } from '../../features/order/orderSlice';
 import { ModalUI } from '../ui/modal/modal';
@@ -33,7 +34,7 @@ export const BurgerConstructor: FC = () => {
     const ingredientsIds = [
       constructorItems.bun._id,
       ...constructorItems.ingredients.map(
-        (item: TConstructorIngredient) => item._id
+        (item: TConstructorIngredientWithId) => item._id
       ),
       constructorItems.bun._id
     ];
@@ -48,7 +49,7 @@ export const BurgerConstructor: FC = () => {
     () =>
       (constructorItems.bun ? constructorItems.bun.price * 2 : 0) +
       constructorItems.ingredients.reduce(
-        (s: number, v: TConstructorIngredient) => s + v.price,
+        (s: number, v: TConstructorIngredientWithId) => s + v.price,
         0
       ),
     [constructorItems]
@@ -61,7 +62,8 @@ export const BurgerConstructor: FC = () => {
         orderRequest={orderRequest}
         constructorItems={{
           bun: constructorItems.bun as TIngredient | null,
-          ingredients: constructorItems.ingredients as TConstructorIngredient[]
+          ingredients:
+            constructorItems.ingredients as TConstructorIngredientWithId[]
         }}
         orderModalData={orderModalData}
         onOrderClick={onOrderClick}

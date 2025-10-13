@@ -1,7 +1,8 @@
-import { TConstructorIngredient } from '@utils-types';
+import { TIngredient } from '../../utils/types';
 
+export type TConstructorIngredientWithId = TIngredient & { uniqueId: string };
 export type BurgerConstructorElementProps = {
-  ingredient: TConstructorIngredient;
+  ingredient: TConstructorIngredientWithId;
   index: number;
   totalItems: number;
 };

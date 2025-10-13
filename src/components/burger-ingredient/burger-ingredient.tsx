@@ -12,20 +12,8 @@ export const BurgerIngredient: FC<TBurgerIngredientProps> = memo(
     const dispatch = useDispatch();
 
     const handleAdd = () => {
-      if (ingredient.type === 'bun') {
-        // Булка — только поля TIngredient (без id)
-        dispatch(addIngredient({ ...ingredient }));
-        dispatch(increaseCount({ id: ingredient._id, type: ingredient.type }));
-      } else {
-        // Начинка — с уникальным id
-        dispatch(
-          addIngredient({
-            ...ingredient,
-            id: String(Date.now() + Math.random())
-          })
-        );
-        dispatch(increaseCount({ id: ingredient._id, type: ingredient.type }));
-      }
+      dispatch(addIngredient({ ...ingredient }));
+      dispatch(increaseCount({ id: ingredient._id, type: ingredient.type }));
     };
 
     return (

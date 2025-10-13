@@ -1,9 +1,14 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { TIngredient, TConstructorIngredient } from '../../utils/types';
+import { TIngredient } from '../../utils/types';
+import { v4 as uuidv4 } from 'uuid';
 
+// Тип ингредиента с уникальным id для конструктора
+type TConstructorIngredientWithId = TIngredient & { uniqueId: string };
+
+// Состояние конструктора
 type TConstructorState = {
   bun: TIngredient | null;
-  ingredients: TConstructorIngredient[];
+  ingredients: TConstructorIngredientWithId[];
 };
 
 const initialState: TConstructorState = {
@@ -15,33 +20,37 @@ const constructorItemsSlice = createSlice({
   name: 'constructorItems',
   initialState,
   reducers: {
-    addIngredient(
-      state,
-      action: PayloadAction<TIngredient | TConstructorIngredient>
-    ) {
-      if (action.payload.type === 'bun') {
-        // Булка — только поля TIngredient (без id)
-        const { id, ...bunData } = action.payload as TConstructorIngredient;
-        state.bun = bunData as TIngredient;
-      } else {
-        state.ingredients.push(action.payload as TConstructorIngredient);
-      }
+    // Добавление ингредиента: булка кладётся в bun, остальные — в ingredients
+    addIngredient: {
+      reducer: (state, action: PayloadAction<TConstructorIngredientWithId>) => {
+        if (action.payload.type === 'bun') {
+          state.bun = action.payload;
+        } else {
+          state.ingredients.push(action.payload);
+        }
+      },
+      prepare: (ingredient: TIngredient) => ({
+        payload: { ...ingredient, uniqueId: uuidv4() }
+      })
     },
-    removeIngredient(state, action: PayloadAction<string>) {
+    // Удаление ингредиента по уникальному uuid
+    removeIngredient: (state, action: PayloadAction<string>) => {
       state.ingredients = state.ingredients.filter(
-        (item) => item.id !== action.payload
+        (item) => item.uniqueId !== action.payload
       );
     },
-    moveIngredient(
+    // Перемещение ингредиента (drag & drop)
+    moveIngredient: (
       state,
-      action: PayloadAction<{ dragIndex: number; hoverIndex: number }>
-    ) {
-      const { dragIndex, hoverIndex } = action.payload;
-      const dragged = state.ingredients[dragIndex];
-      state.ingredients.splice(dragIndex, 1);
-      state.ingredients.splice(hoverIndex, 0, dragged);
+      action: PayloadAction<{ fromIndex: number; toIndex: number }>
+    ) => {
+      const { fromIndex, toIndex } = action.payload;
+      const items = state.ingredients;
+      const [removed] = items.splice(fromIndex, 1);
+      items.splice(toIndex, 0, removed);
     },
-    clearConstructor(state) {
+    // Очистка конструктора
+    clearConstructor: (state) => {
       state.bun = null;
       state.ingredients = [];
     }
