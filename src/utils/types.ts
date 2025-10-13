@@ -1,3 +1,4 @@
+// Базовый тип ингредиента из API
 export type TIngredient = {
   _id: string;
   name: string;
@@ -12,8 +13,9 @@ export type TIngredient = {
   image_mobile: string;
 };
 
+// Тип ингредиента для конструктора с уникальным ключом для React и сортировки
 export type TConstructorIngredient = TIngredient & {
-  id: string;
+  uniqueId: string;
 };
 
 export type TOrder = {

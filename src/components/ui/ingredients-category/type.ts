@@ -4,5 +4,6 @@ export type TIngredientsCategoryUIProps = {
   title: string;
   titleRef: React.RefObject<HTMLHeadingElement>;
   ingredients: TIngredient[];
-  ingredientsCounters: Record<string, number>;
+  ingredientsCounters: { [key: string]: number };
+  onIngredientClick: (id: string) => void;
 };
