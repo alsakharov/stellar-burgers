@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { fetchWithRefresh } from '../../utils/burger-api';
 import { setCookie, deleteCookie, getCookie } from '../../utils/cookie';
 
-const URL = 'https://norma.nomoreparties.space/api';
+const URL = 'https://norma.education-services.ru/api';
 
 interface User {
   name: string;
