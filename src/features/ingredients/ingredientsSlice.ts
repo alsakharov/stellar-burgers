@@ -6,7 +6,7 @@ interface IngredientsState {
   items: TIngredient[];
   isLoading: boolean;
   error: string | null;
-  counts: { [id: string]: number };
+  counts: Record<string, number>;
 }
 
 const initialState: IngredientsState = {
@@ -27,11 +27,13 @@ const ingredientsSlice = createSlice({
   reducers: {
     increaseCount(state, action: PayloadAction<{ id: string; type: string }>) {
       const { id, type } = action.payload;
+
       if (type === 'bun') {
-        // Для булки всегда 2, остальные булки сбрасываем
+        // Сбрасываем счётчики у других булок и ставим текущей булке 2
         Object.keys(state.counts).forEach((key) => {
-          if (state.items.find((item) => item._id === key)?.type === 'bun') {
-            state.counts[key] = 0;
+          const item = state.items.find((it) => it._id === key);
+          if (item?.type === 'bun') {
+            delete state.counts[key];
           }
         });
         state.counts[id] = 2;
@@ -39,14 +41,33 @@ const ingredientsSlice = createSlice({
         state.counts[id] = (state.counts[id] || 0) + 1;
       }
     },
+
     decreaseCount(state, action: PayloadAction<{ id: string; type: string }>) {
       const { id, type } = action.payload;
+
       if (type === 'bun') {
-        state.counts[id] = 0;
+        // при удалении булки — сбрасываем её счётчик
+        if (state.counts[id]) delete state.counts[id];
       } else {
-        state.counts[id] = Math.max((state.counts[id] || 1) - 1, 0);
+        const current = state.counts[id] || 0;
+        const updated = Math.max(current - 1, 0);
+        if (updated === 0) {
+          delete state.counts[id];
+        } else {
+          state.counts[id] = updated;
+        }
       }
     },
+
+    setCount(state, action: PayloadAction<{ id: string; count: number }>) {
+      const { id, count } = action.payload;
+      if (count <= 0) {
+        delete state.counts[id];
+      } else {
+        state.counts[id] = count;
+      }
+    },
+
     resetCounts(state) {
       state.counts = {};
     }
@@ -68,6 +89,6 @@ const ingredientsSlice = createSlice({
   }
 });
 
-export const { increaseCount, decreaseCount, resetCounts } =
+export const { increaseCount, decreaseCount, resetCounts, setCount } =
   ingredientsSlice.actions;
 export default ingredientsSlice.reducer;

@@ -1,3 +1,4 @@
+import React, { useEffect } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -6,6 +7,9 @@ import {
   useNavigate,
   useParams
 } from 'react-router-dom';
+
+import { useSelector, useDispatch } from '../../services/store';
+
 import { ConstructorPage } from '../../pages/constructor-page';
 import { Feed } from '../../pages/feed';
 import { Login } from '../../pages/login';
@@ -16,34 +20,48 @@ import { Profile } from '../../pages/profile';
 import { ProfileOrders } from '../../pages/profile-orders';
 import { NotFound404 } from '../../pages/not-fount-404';
 
-import '../../index.css';
-import styles from './app.module.css';
+import { fetchUser } from '../../features/user/userSlice';
+import { fetchIngredients } from '../../features/ingredients/ingredientsSlice';
 
 import { AppHeader } from '../app-header';
 import { ProtectedRoute } from '../protected-route';
 
-import { useSelector, useDispatch } from '../../services/store';
-import { useEffect } from 'react';
-import { fetchUser } from '../../features/user/userSlice';
-import { fetchIngredients } from '../../features/ingredients/ingredientsSlice';
 import { Preloader } from '../ui/preloader';
 import { ModalUI } from '../ui/modal/modal';
 import { IngredientDetailsUI } from '../ui/ingredient-details';
-import { OrderDetailsUI } from '../ui/order-details/order-details';
+import { OrderInfoUI } from '../ui/order-info/order-info';
 
-const IngredientPage = () => {
+import '../../index.css';
+import styles from './app.module.css';
+
+/* helper — перейти на background (path+search+state) */
+const navigateToBackground = (
+  navigate: ReturnType<typeof useNavigate>,
+  bg: any,
+  replace = true
+) => {
+  if (!bg) {
+    navigate('/', { replace });
+    return;
+  }
+  const pathname = bg.pathname || '/';
+  const search = bg.search || '';
+  const state = bg.state || undefined;
+  navigate(pathname + search, { replace, state });
+};
+
+/* Страница ингредиента (полный экран) */
+const IngredientPage: React.FC = () => {
   const { id } = useParams();
   const dispatch = useDispatch();
-  const ingredients = useSelector((state: any) => state.ingredients.items);
-  const isLoading = useSelector((state: any) => state.ingredients.isLoading);
+  const ingredients = useSelector((s: any) => s.ingredients.items || []);
+  const isLoading = useSelector((s: any) => s.ingredients.isLoading);
 
   useEffect(() => {
-    if (!ingredients.length) {
-      dispatch(fetchIngredients());
-    }
+    if (!ingredients.length) dispatch(fetchIngredients());
   }, [dispatch, ingredients.length]);
 
-  const ingredient = ingredients.find((item: any) => item._id === id);
+  const ingredient = ingredients.find((it: any) => it._id === id);
 
   if (isLoading || !ingredients.length) return <Preloader />;
   if (!ingredient)
@@ -60,40 +78,186 @@ const IngredientPage = () => {
   );
 };
 
-const IngredientModal = () => {
+/* Модалка ингредиента (overlay) */
+const IngredientModal: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const ingredients = useSelector((state: any) => state.ingredients.items);
-  const ingredient = ingredients.find((item: any) => item._id === id);
+  const location = useLocation();
+  const ingredients = useSelector((s: any) => s.ingredients.items || []);
+  const ingredient = ingredients.find((it: any) => it._id === id);
 
   if (!ingredient) return null;
 
+  const handleClose = () => {
+    const state = (location && (location as any).state) || {};
+    const bg = state.background;
+    if (bg) {
+      navigateToBackground(navigate, bg, true);
+      return;
+    }
+    navigate('/', { replace: true });
+  };
+
   return (
-    <ModalUI title='Детали ингредиента' onClose={() => navigate(-1)}>
+    <ModalUI title='Детали ингредиента' onClose={handleClose}>
       <IngredientDetailsUI ingredientData={ingredient} />
     </ModalUI>
   );
 };
 
-const OrderInfoModal = () => {
+/* Модалка заказа (overlay) — источник: state | профиль | стор */
+const OrderInfoModal: React.FC = () => {
   const navigate = useNavigate();
-  const orderModalData = useSelector(
-    (state: any) => state.order.orderModalData
+  const location = useLocation();
+  const params = useParams<{ number?: string }>();
+
+  const navState = (location && (location as any).state) || {};
+  const navOrder = navState.order;
+  const navOrderIsObject =
+    navOrder &&
+    typeof navOrder === 'object' &&
+    ('number' in navOrder || 'id' in navOrder || '_id' in navOrder);
+  const orderFromNav = navOrderIsObject ? navOrder : null;
+
+  const profileOrders = useSelector((s: any) => s.profileOrders.orders || []);
+  const feedOrders = useSelector((s: any) => s.feed?.orders || []);
+  const orderModalData = useSelector((s: any) => s.order?.orderModalData);
+  const orderFromStore = orderModalData?.order ?? null;
+
+  const paramNumber = params.number ?? null;
+
+  const orderFromProfile =
+    profileOrders.find(
+      (o: any) =>
+        String(o.number) === String(paramNumber) ||
+        String(o._id) === String(paramNumber) ||
+        (orderFromNav &&
+          (String(o._id) === String(orderFromNav._id) ||
+            String(o.number) === String(orderFromNav.number)))
+    ) ?? null;
+
+  const order = orderFromNav ?? orderFromProfile ?? orderFromStore ?? null;
+
+  if (!order) return null;
+
+  const ingredients: any[] = useSelector((s: any) => s.ingredients.items || []);
+
+  type TIngredientsWithCount = { [key: string]: any & { count: number } };
+
+  const ingredientsInfo = (order.ingredients || []).reduce(
+    (acc: TIngredientsWithCount, id: string) => {
+      if (!acc[id]) {
+        const ingredient = ingredients.find((ing) => ing._id === id);
+        if (ingredient) acc[id] = { ...ingredient, count: 1 };
+      } else {
+        acc[id].count++;
+      }
+      return acc;
+    },
+    {} as TIngredientsWithCount
   );
 
-  if (!orderModalData || !orderModalData.order) return null;
+  const total = Object.values(ingredientsInfo).reduce(
+    (acc: number, item: any) => acc + (item.price || 0) * item.count,
+    0
+  );
+
+  const date = order.createdAt ? new Date(order.createdAt) : new Date();
+
+  const orderInfo = {
+    ...order,
+    ingredientsInfo,
+    date,
+    total
+  };
+
+  const handleClose = () => {
+    const state = (location && (location as any).state) || {};
+    const bg = state.background;
+
+    if (bg) {
+      navigateToBackground(navigate, bg, true);
+      return;
+    }
+
+    if (profileOrders && profileOrders.length > 0) {
+      navigate('/profile/orders', { replace: true });
+      return;
+    }
+
+    if (feedOrders && feedOrders.length > 0) {
+      navigate('/feed', { replace: true });
+      return;
+    }
+
+    navigate('/', { replace: true });
+  };
 
   return (
-    <ModalUI title='' onClose={() => navigate(-1)}>
-      <OrderDetailsUI orderNumber={orderModalData.order.number} />
+    <ModalUI title={`Заказ #${order.number}`} onClose={handleClose}>
+      <OrderInfoUI orderInfo={orderInfo} />
     </ModalUI>
   );
 };
 
-const AppRoutes = () => {
+/* Прямая страница заказа /feed/:number */
+const OrderInfoUIWrapper: React.FC = () => {
+  const params = useParams<{ number?: string }>();
+  const profileOrders = useSelector((s: any) => s.profileOrders.orders || []);
+  const ingredients: any[] = useSelector((s: any) => s.ingredients.items || []);
+
+  const raw = params.number ?? null;
+  if (!raw) return <NotFound404 />;
+
+  const order =
+    profileOrders.find(
+      (o: any) =>
+        String(o.number) === String(raw) || String(o._id) === String(raw)
+    ) ?? null;
+
+  if (!order) return <Preloader />;
+
+  type TIngredientsWithCount = { [key: string]: any & { count: number } };
+  const ingredientsInfo = (order.ingredients || []).reduce(
+    (acc: TIngredientsWithCount, id: string) => {
+      if (!acc[id]) {
+        const ingredient = ingredients.find((ing) => ing._id === id);
+        if (ingredient) acc[id] = { ...ingredient, count: 1 };
+      } else {
+        acc[id].count++;
+      }
+      return acc;
+    },
+    {} as TIngredientsWithCount
+  );
+
+  const total = Object.values(ingredientsInfo).reduce(
+    (acc: number, item: any) => acc + (item.price || 0) * item.count,
+    0
+  );
+
+  const date = order.createdAt ? new Date(order.createdAt) : new Date();
+
+  const orderInfo = {
+    ...order,
+    ingredientsInfo,
+    date,
+    total
+  };
+
+  return (
+    <div className='pt-30 pb-30'>
+      <OrderInfoUI orderInfo={orderInfo} />
+    </div>
+  );
+};
+
+/* Роуты + overlays */
+const AppRoutes: React.FC = () => {
   const location = useLocation();
+  // background если открыт overlay
   // @ts-ignore
-  const background = location.state && location.state.background;
+  const background = location.state && (location.state as any).background;
 
   return (
     <>
@@ -125,7 +289,7 @@ const AppRoutes = () => {
           element={<ProtectedRoute element={<ProfileOrders />} />}
         />
         <Route path='/ingredients/:id' element={<IngredientPage />} />
-        <Route path='/feed/:number' element={<OrderInfoModal />} />
+        <Route path='/feed/:number' element={<OrderInfoUIWrapper />} />
         <Route path='*' element={<NotFound404 />} />
       </Routes>
 
@@ -143,17 +307,18 @@ const AppRoutes = () => {
   );
 };
 
-const App = () => {
+/* Корневой компонент */
+const App: React.FC = () => {
   const dispatch = useDispatch();
-  const isUserLoaded = useSelector((state: any) => state.user.isUserLoaded);
+  const isUserLoaded = useSelector((s: any) => s.user.isUserLoaded);
 
   useEffect(() => {
-    // fetchUser всегда вызывается при старте, даже если нет токена
-    // он сам корректно выставит isUserLoaded
-    if (!isUserLoaded) {
-      dispatch(fetchUser());
-    }
+    if (!isUserLoaded) dispatch(fetchUser());
   }, [dispatch, isUserLoaded]);
+
+  useEffect(() => {
+    dispatch(fetchIngredients());
+  }, [dispatch]);
 
   return (
     <BrowserRouter

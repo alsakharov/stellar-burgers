@@ -77,18 +77,27 @@ module.exports = {
       '@ui-pages': path.resolve(__dirname, './src/components/ui/pages'),
       '@utils-types': path.resolve(__dirname, './src/utils/types'),
       '@api': path.resolve(__dirname, './src/utils/burger-api.ts'),
-      '@slices': path.resolve(__dirname, './src/services/slices'),
-      '@selectors': path.resolve(__dirname, './src/services/selectors')
+      '@slices': path.resolve(__dirname, './src/services/slices')
     }
   },
   output: {
     path: path.resolve(__dirname, './dist'),
-    filename: 'bundle.js'
+    filename: 'bundle.js',
+    publicPath: '/' // бандл будет доступен по /bundle.js
   },
   devServer: {
-    static: path.join(__dirname, './dist'),
+    static: {
+      directory: path.join(__dirname, './dist'),
+      publicPath: '/' // отдавать статические через корень
+    },
+    devMiddleware: {
+      publicPath: '/' // webpack-dev-middleware publicPath
+    },
     compress: true,
-    historyApiFallback: true,
-    port: 4000
+    historyApiFallback: {
+      index: '/' // fallback на /
+    },
+    port: 4000,
+    hot: true
   }
 };

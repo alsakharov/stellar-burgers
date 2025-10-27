@@ -1,11 +1,21 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { orderBurgerApi } from '../../utils/burger-api';
+import { clearConstructor } from '../constructorItems/constructorItemsSlice';
+import { resetCounts } from '../ingredients/ingredientsSlice';
 
 export const createOrder = createAsyncThunk(
   'order/createOrder',
   async (ingredients: string[], thunkAPI) => {
     try {
       const response = await orderBurgerApi(ingredients);
+
+      // Очистка конструктора и сброс счётчиков ингредиентов
+      try {
+        thunkAPI.dispatch(clearConstructor());
+        thunkAPI.dispatch(resetCounts());
+      } catch {
+        // noop
+      }
 
       return response;
     } catch (error: any) {
