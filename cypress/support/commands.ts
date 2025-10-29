@@ -1,28 +1,44 @@
 /// <reference types="cypress" />
 
-declare namespace Cypress {
-  interface Chainable {
-    /**
-     * Custom command to drag and drop an element
-     * @example cy.dragAndDrop('[data-testid="ingredient-item"]', '[data-testid="burger-constructor"]')
-     */
-    dragAndDrop(source: string, target: string): Chainable<Element>;
+/**
+ * Расширяем глобальные типы Cypress, объявляя нашу команду dragAndDrop.
+ * Важно: параметр типа Subject должен совпадать с декларацией Cypress (обычно = any),
+ * иначе TypeScript выдаст TS2428 ("All 'Chainable' declarations must have identical type parameters").
+ */
+declare global {
+  namespace Cypress {
+    interface Chainable<Subject = any> {
+      /**
+       * Перетащить элемент из source в target.
+       * @param source селектор источника
+       * @param target селектор цели
+       * @returns Chainable с целью (JQuery<HTMLElement>)
+       */
+      dragAndDrop(source: string, target: string): Chainable<JQuery<HTMLElement>>;
+    }
   }
 }
 
+/**
+ * Реализация кастомной команды dragAndDrop.
+ * - Создаём DataTransfer
+ * - Триггерим dragstart на source, затем drop на target и dragend на source
+ * - Возвращаем cy.get(target) для продолжения цепочки
+ */
 Cypress.Commands.add('dragAndDrop', (source: string, target: string) => {
   const dataTransfer = new DataTransfer();
-  // dragstart на источнике
-  cy.get(source, { timeout: 10000 })
-    .should('exist')
-    .then(($el) => cy.wrap($el).trigger('dragstart', { dataTransfer, force: true }))
-    // drop на цели
-    .then(() => cy.get(target, { timeout: 10000 }).trigger('drop', { dataTransfer, force: true }))
-    // dragend как финализация
-    .then(() => cy.get(source).trigger('dragend', { force: true }));
 
-  // возвращаем chainable для дальнейших вызовов
-  // Приводим тип, чтобы удовлетворить сигнатуру CommandFn — безопасно на runtime,
-  // т.к. cy.get возвращает Chainable<JQuery<HTMLElement>>, которое в рантайме ведёт себя как Chainable
-  return cy.get(target) as unknown as Cypress.Chainable<Element>;
+  return cy
+    .get(source, { timeout: 10000 })
+    .should('exist')
+    .then(($el) => {
+      const $elTyped = $el as JQuery<HTMLElement>;
+      return cy.wrap($elTyped).trigger('dragstart', { dataTransfer, force: true });
+    })
+    .then(() => cy.get(target, { timeout: 10000 }).trigger('drop', { dataTransfer, force: true }))
+    .then(() => cy.get(source).trigger('dragend', { force: true }))
+    .then(() => cy.get(target));
 });
+
+// Сделать файл модулем, чтобы декларация global применялась корректно
+export {};
