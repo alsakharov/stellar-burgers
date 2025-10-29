@@ -1,4 +1,4 @@
-import { Middleware } from '@reduxjs/toolkit';
+import type { Middleware, MiddlewareAPI } from '@reduxjs/toolkit';
 import {
   wsConnect,
   wsDisconnect,
@@ -7,6 +7,7 @@ import {
 } from '../../features/profileOrders/profileOrdersSlice';
 import { getCookie } from '../../utils/cookie';
 import { getOrdersApi } from '../../utils/burger-api';
+import type { AppDispatch, RootState } from '../../services/store';
 
 const DEFAULT_WS = 'wss://norma.nomoreparties.space';
 const WS_BASE = process.env.WS_URL || DEFAULT_WS;
@@ -23,7 +24,12 @@ function readRawToken(): string | null {
   return token.replace(/^Bearer\s+/i, '').trim();
 }
 
-async function fetchOrdersFallback(store: any) {
+/**
+ * Фоллбэк через HTTP — типизируем store как MiddlewareAPI<AppDispatch, RootState>
+ */
+async function fetchOrdersFallback(
+  store: MiddlewareAPI<AppDispatch, RootState>
+) {
   try {
     const orders = await getOrdersApi();
     store.dispatch(
@@ -34,11 +40,13 @@ async function fetchOrdersFallback(store: any) {
       })
     );
   } catch (e) {
-    store.dispatch(wsError('WS and HTTP fallback both failed'));
+    // в случае ошибки диспатчим wsError с текстовым сообщением
+    const msg = e instanceof Error ? e.message : String(e);
+    store.dispatch(wsError(`WS and HTTP fallback both failed: ${msg}`));
   }
 }
 
-export const wsProfileOrdersMiddleware: Middleware = (store) => {
+export const wsProfileOrdersMiddleware: Middleware = (storeApi) => {
   let socket: WebSocket | null = null;
   let connecting = false;
   let manualClose = false;
@@ -75,11 +83,11 @@ export const wsProfileOrdersMiddleware: Middleware = (store) => {
     if (!shouldAttemptWs()) {
       if (!fallbackUsed) {
         fallbackUsed = true;
-        await fetchOrdersFallback(store);
+        await fetchOrdersFallback(storeApi);
       }
       if (Date.now() - lastErrorAt > 5000) {
         lastErrorAt = Date.now();
-        store.dispatch(wsError('WebSocket skipped in current environment'));
+        storeApi.dispatch(wsError('WebSocket skipped in current environment'));
       }
       return;
     }
@@ -88,11 +96,11 @@ export const wsProfileOrdersMiddleware: Middleware = (store) => {
     if (!token) {
       if (!fallbackUsed) {
         fallbackUsed = true;
-        await fetchOrdersFallback(store);
+        await fetchOrdersFallback(storeApi);
       }
       if (Date.now() - lastErrorAt > 5000) {
         lastErrorAt = Date.now();
-        store.dispatch(wsError('No access token for WS'));
+        storeApi.dispatch(wsError('No access token for WS'));
       }
       return;
     }
@@ -102,11 +110,11 @@ export const wsProfileOrdersMiddleware: Middleware = (store) => {
     } catch {
       if (!fallbackUsed) {
         fallbackUsed = true;
-        await fetchOrdersFallback(store);
+        await fetchOrdersFallback(storeApi);
       }
       if (Date.now() - lastErrorAt > 5000) {
         lastErrorAt = Date.now();
-        store.dispatch(wsError('API unreachable — using HTTP fallback'));
+        storeApi.dispatch(wsError('API unreachable — using HTTP fallback'));
       }
       return;
     }
@@ -120,11 +128,11 @@ export const wsProfileOrdersMiddleware: Middleware = (store) => {
       connecting = false;
       if (!fallbackUsed) {
         fallbackUsed = true;
-        await fetchOrdersFallback(store);
+        await fetchOrdersFallback(storeApi);
       }
       if (Date.now() - lastErrorAt > 5000) {
         lastErrorAt = Date.now();
-        store.dispatch(wsError('WebSocket constructor error'));
+        storeApi.dispatch(wsError('WebSocket constructor error'));
       }
       return;
     }
@@ -138,7 +146,7 @@ export const wsProfileOrdersMiddleware: Middleware = (store) => {
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        store.dispatch(
+        storeApi.dispatch(
           wsMessage({
             orders: data.orders ?? [],
             total: data.total ?? 0,
@@ -153,7 +161,7 @@ export const wsProfileOrdersMiddleware: Middleware = (store) => {
     socket.onerror = () => {
       if (Date.now() - lastErrorAt > 5000) {
         lastErrorAt = Date.now();
-        store.dispatch(wsError('WebSocket error'));
+        storeApi.dispatch(wsError('WebSocket error'));
       }
     };
 
@@ -178,9 +186,9 @@ export const wsProfileOrdersMiddleware: Middleware = (store) => {
           fallbackUsed = true;
           if (Date.now() - lastErrorAt > 5000) {
             lastErrorAt = Date.now();
-            store.dispatch(wsError('WS failed, using HTTP fallback'));
+            storeApi.dispatch(wsError('WS failed, using HTTP fallback'));
           }
-          await fetchOrdersFallback(store);
+          await fetchOrdersFallback(storeApi);
         }
       }
     };

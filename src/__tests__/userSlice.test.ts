@@ -1,3 +1,4 @@
+import type { Action } from 'redux';
 import reducer, {
   setUser,
   logout,
@@ -18,7 +19,7 @@ jest.mock('../utils/cookie', () => ({
 }));
 
 describe('user slice', () => {
-  const initial = reducer(undefined, { type: '@@INIT' } as any);
+  const initial = reducer(undefined, { type: '@@INIT' } as Action);
 
   it('инициализируется с корректным initial state', () => {
     expect(initial).toHaveProperty('user', null);
@@ -40,7 +41,7 @@ describe('user slice', () => {
       user: { name: 'X', email: 'x@x' },
       isUserLoaded: true
     };
-    const next = reducer(stateWithUser as any, logout());
+    const next = reducer(stateWithUser as ReturnType<typeof reducer>, logout());
     expect(next.user).toBeNull();
     expect(next.isUserLoaded).toBe(true);
   });
@@ -50,7 +51,7 @@ describe('user slice', () => {
       name: 'a',
       email: 'b',
       password: 'p'
-    } as any);
+    });
     const next = reducer(initial, action);
     expect(next.isLoading).toBe(true);
     expect(next.error).toBeNull();
@@ -59,7 +60,11 @@ describe('user slice', () => {
 
   it('registerUser.fulfilled записывает user и сбрасывает isLoading', () => {
     const user = { name: 'U', email: 'u@u' };
-    const action = registerUser.fulfilled(user as any, 'reqId', {} as any);
+    const action = registerUser.fulfilled(user, 'reqId', {
+      name: 'a',
+      email: 'b',
+      password: 'p'
+    });
     const next = reducer(initial, action);
     expect(next.isLoading).toBe(false);
     expect(next.user).toEqual(user);
@@ -67,7 +72,10 @@ describe('user slice', () => {
   });
 
   it('registerUser.rejected записывает ошибку и сбрасывает isLoading', () => {
-    const action = { type: registerUser.rejected.type, payload: 'err' } as any;
+    const action = {
+      type: registerUser.rejected.type,
+      payload: 'err'
+    } as ReturnType<typeof registerUser.rejected>;
     const next = reducer(initial, action);
     expect(next.isLoading).toBe(false);
     expect(next.error).toBe('err');
@@ -78,7 +86,7 @@ describe('user slice', () => {
     const action = loginUser.pending('reqId', {
       email: 'e',
       password: 'p'
-    } as any);
+    });
     const next = reducer(initial, action);
     expect(next.isLoading).toBe(true);
     expect(next.error).toBeNull();
@@ -87,7 +95,10 @@ describe('user slice', () => {
 
   it('loginUser.fulfilled записывает user и сбрасывает isLoading', () => {
     const user = { name: 'L', email: 'l@l' };
-    const action = loginUser.fulfilled(user as any, 'reqId', {} as any);
+    const action = loginUser.fulfilled(user, 'reqId', {
+      email: 'e',
+      password: 'p'
+    });
     const next = reducer(initial, action);
     expect(next.isLoading).toBe(false);
     expect(next.user).toEqual(user);
@@ -98,7 +109,7 @@ describe('user slice', () => {
     const action = {
       type: loginUser.rejected.type,
       payload: 'err-login'
-    } as any;
+    } as ReturnType<typeof loginUser.rejected>;
     const next = reducer(initial, action);
     expect(next.isLoading).toBe(false);
     expect(next.error).toBe('err-login');
@@ -106,7 +117,7 @@ describe('user slice', () => {
   });
 
   it('updateUser.pending ставит isLoading = true', () => {
-    const action = updateUser.pending('reqId', {} as any);
+    const action = updateUser.pending('reqId', { name: 'X' });
     const next = reducer(initial, action);
     expect(next.isLoading).toBe(true);
     expect(next.error).toBeNull();
@@ -114,7 +125,7 @@ describe('user slice', () => {
 
   it('updateUser.fulfilled обновляет user и сбрасывает isLoading', () => {
     const user = { name: 'Upd', email: 'upd@u' };
-    const action = updateUser.fulfilled(user as any, 'reqId', {} as any);
+    const action = updateUser.fulfilled(user, 'reqId', { name: 'Upd' });
     const next = reducer(initial, action);
     expect(next.isLoading).toBe(false);
     expect(next.user).toEqual(user);
@@ -125,7 +136,7 @@ describe('user slice', () => {
     const action = {
       type: updateUser.rejected.type,
       payload: 'err-update'
-    } as any;
+    } as ReturnType<typeof updateUser.rejected>;
     const next = reducer(initial, action);
     expect(next.isLoading).toBe(false);
     expect(next.error).toBe('err-update');
@@ -142,7 +153,7 @@ describe('user slice', () => {
 
   it('fetchUser.fulfilled записывает user и сбрасывает isLoading', () => {
     const user = { name: 'F', email: 'f@f' };
-    const action = fetchUser.fulfilled(user as any, 'reqId', undefined);
+    const action = fetchUser.fulfilled(user, 'reqId', undefined);
     const next = reducer(initial, action);
     expect(next.isLoading).toBe(false);
     expect(next.user).toEqual(user);
@@ -153,7 +164,7 @@ describe('user slice', () => {
     const action = {
       type: fetchUser.rejected.type,
       payload: 'no token'
-    } as any;
+    } as ReturnType<typeof fetchUser.rejected>;
     const next = reducer(initial, action);
     expect(next.isLoading).toBe(false);
     expect(next.user).toBeNull();

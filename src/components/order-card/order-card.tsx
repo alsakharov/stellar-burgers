@@ -10,33 +10,30 @@ const maxIngredients = 6;
 export const OrderCard: FC<OrderCardProps> = memo(({ order }) => {
   const location = useLocation();
 
-  const ingredients: TIngredient[] = useSelector(
-    (state: any) => state.ingredients.items || []
-  );
+  const ingredients = useSelector(
+    (state) => state.ingredients.items ?? []
+  ) as TIngredient[];
 
   const orderInfo = useMemo(() => {
-    if (!ingredients.length || !order || !Array.isArray(order.ingredients))
+    if (!ingredients.length || !order || !Array.isArray(order.ingredients)) {
       return null;
+    }
 
-    const ingredientsInfo = order.ingredients.reduce(
-      (acc: TIngredient[], id: string) => {
-        const ingredient = ingredients.find((ing) => ing._id === id);
-        if (ingredient) acc.push(ingredient);
-        return acc;
-      },
-      [] as TIngredient[]
-    );
+    const ingredientsInfo: TIngredient[] = order.ingredients.reduce<
+      TIngredient[]
+    >((acc, id) => {
+      const ingredient = ingredients.find((ing) => ing._id === id);
+      if (ingredient) acc.push(ingredient);
+      return acc;
+    }, []);
 
     const total = ingredientsInfo.reduce(
-      (acc, item) => acc + (item.price || 0),
+      (acc, item) => acc + (Number(item.price) || 0),
       0
     );
 
     const ingredientsToShow = ingredientsInfo.slice(0, maxIngredients);
-    const remains =
-      ingredientsInfo.length > maxIngredients
-        ? ingredientsInfo.length - maxIngredients
-        : 0;
+    const remains = Math.max(0, ingredientsInfo.length - maxIngredients);
     const date = order.createdAt ? new Date(order.createdAt) : new Date();
 
     return {
@@ -51,7 +48,7 @@ export const OrderCard: FC<OrderCardProps> = memo(({ order }) => {
 
   if (!orderInfo) return null;
 
-  // Безопасный объект state — background и сам order (для modal routing)
+  // locationState передаётся в <Link state={locationState}> для modal routing
   const locationState = { background: location, order };
 
   return (

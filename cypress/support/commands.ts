@@ -1,37 +1,28 @@
 /// <reference types="cypress" />
-// ***********************************************
-// This example commands.ts shows you how to
-// create various custom commands and overwrite
-// existing commands.
-//
-// For more comprehensive examples of custom
-// commands please read more here:
-// https://on.cypress.io/custom-commands
-// ***********************************************
-//
-//
-// -- This is a parent command --
-// Cypress.Commands.add('login', (email, password) => { ... })
-//
-//
-// -- This is a child command --
-// Cypress.Commands.add('drag', { prevSubject: 'element'}, (subject, options) => { ... })
-//
-//
-// -- This is a dual command --
-// Cypress.Commands.add('dismiss', { prevSubject: 'optional'}, (subject, options) => { ... })
-//
-//
-// -- This will overwrite an existing command --
-// Cypress.Commands.overwrite('visit', (originalFn, url, options) => { ... })
-//
-// declare global {
-//   namespace Cypress {
-//     interface Chainable {
-//       login(email: string, password: string): Chainable<void>
-//       drag(subject: string, options?: Partial<TypeOptions>): Chainable<Element>
-//       dismiss(subject: string, options?: Partial<TypeOptions>): Chainable<Element>
-//       visit(originalFn: CommandOriginalFn, url: string, options: Partial<VisitOptions>): Chainable<Element>
-//     }
-//   }
-// }
+
+declare namespace Cypress {
+  interface Chainable {
+    /**
+     * Custom command to drag and drop an element
+     * @example cy.dragAndDrop('[data-testid="ingredient-item"]', '[data-testid="burger-constructor"]')
+     */
+    dragAndDrop(source: string, target: string): Chainable<Element>;
+  }
+}
+
+Cypress.Commands.add('dragAndDrop', (source: string, target: string) => {
+  const dataTransfer = new DataTransfer();
+  // dragstart на источнике
+  cy.get(source, { timeout: 10000 })
+    .should('exist')
+    .then(($el) => cy.wrap($el).trigger('dragstart', { dataTransfer, force: true }))
+    // drop на цели
+    .then(() => cy.get(target, { timeout: 10000 }).trigger('drop', { dataTransfer, force: true }))
+    // dragend как финализация
+    .then(() => cy.get(source).trigger('dragend', { force: true }));
+
+  // возвращаем chainable для дальнейших вызовов
+  // Приводим тип, чтобы удовлетворить сигнатуру CommandFn — безопасно на runtime,
+  // т.к. cy.get возвращает Chainable<JQuery<HTMLElement>>, которое в рантайме ведёт себя как Chainable
+  return cy.get(target) as unknown as Cypress.Chainable<Element>;
+});

@@ -1,212 +1,256 @@
 import reducer, {
   addIngredient,
   removeIngredient,
-  moveIngredient,
   setBun,
+  moveIngredient,
   clearConstructor
 } from '../features/constructorItems/constructorItemsSlice';
+import type { TIngredientInstance } from '../features/constructorItems/constructorItemsSlice';
+import { createIngredient } from '../test-utils';
+import type { TIngredient } from '../utils/types';
 
-/* init */
 describe('constructorItems slice', () => {
-  it('init state', () => {
-    const state = reducer(undefined, { type: '@@INIT' } as any);
-    expect(state).toHaveProperty('bun');
-    expect(state).toHaveProperty('ingredients');
+  // helper: преобразуем TIngredient -> TIngredientInstance, добавляя uniqueId
+  const makeInstanceFromIngredient = (
+    it: TIngredient,
+    uidSuffix = ''
+  ): TIngredientInstance => ({
+    ...it,
+    uniqueId: `${it._id}${uidSuffix ? '-' + uidSuffix : ''}`
   });
 
-  /* add */
-  it('addIngredient adds item', () => {
-    const item = { _id: 'i1', type: 'main', price: 10 } as any;
-    const next = reducer(undefined, addIngredient(item));
-    expect(Array.isArray(next.ingredients)).toBe(true);
-    expect(next.ingredients.length).toBe(1);
+  // фабричные фикстуры
+  const fixtureBun = createIngredient({
+    _id: 'bun-01',
+    type: 'bun',
+    price: 100
+  });
+  const fixtureMainA = createIngredient({
+    _id: 'main-01',
+    type: 'main',
+    price: 50
+  });
+  const fixtureMainB = createIngredient({
+    _id: 'main-02',
+    type: 'main',
+    price: 30
   });
 
-  /* remove (flex) */
-  it('removeIngredient removes by available payload forms', () => {
-    const item = { _id: 'i2', type: 'main', price: 5 } as any;
-    const afterAdd = reducer(undefined, addIngredient(item));
-    expect(afterAdd.ingredients.length).toBeGreaterThanOrEqual(1);
-
-    const added = afterAdd.ingredients[afterAdd.ingredients.length - 1]!;
-    const payload: any = (added.uniqueId ??
-      added._uid ??
-      added._id ??
-      added) as any;
-
-    const afterRemove = reducer(afterAdd, removeIngredient(payload as any));
-    expect(Array.isArray(afterRemove.ingredients)).toBe(true);
-    expect(afterRemove.ingredients.length).toBe(0);
+  it('returns initial/cleared state', () => {
+    const init = reducer(undefined, clearConstructor());
+    expect(init).toHaveProperty('bun');
+    expect(init).toHaveProperty('ingredients');
+    expect(init.total).toBe(0);
+    expect(init.bun).toBeNull();
+    expect(Array.isArray(init.ingredients)).toBe(true);
   });
 
-  /* reorder */
-  it('moveIngredient reorders elements', () => {
-    const a = { _id: 'a', type: 'main' } as any;
-    const b = { _id: 'b', type: 'main' } as any;
-    let state = reducer(undefined, { type: '@@INIT' } as any);
-    state = reducer(state, addIngredient(a));
-    state = reducer(state, addIngredient(b));
-    const before = state.ingredients.map(
-      (i: any) => i._id ?? i.uniqueId ?? JSON.stringify(i)
+  it('setBun sets bun and recalc total (bun*2)', () => {
+    let state = reducer(undefined, clearConstructor());
+    const bunInst = makeInstanceFromIngredient(fixtureBun, 'x');
+    state = reducer(state, setBun(bunInst));
+    expect(state.bun?._id).toBe(fixtureBun._id);
+    expect(state.total).toBe((Number(fixtureBun.price) || 0) * 2);
+  });
+
+  it('addIngredient: bun via addIngredient branch sets bun and handles string prices', () => {
+    let state = reducer(undefined, clearConstructor());
+
+    const bunPayload = {
+      ...makeInstanceFromIngredient(fixtureBun, 'bun'),
+      price: '20'
+    } as unknown as TIngredientInstance;
+    state = reducer(state, addIngredient(bunPayload));
+    // bun set
+    expect(state.bun?._id).toBe(fixtureBun._id);
+    // string '20' should be parsed as 20 -> total = 40
+    expect(state.total).toBe(40);
+
+    // add ingredient with invalid price string -> treated as 0
+    const badPrice = {
+      ...makeInstanceFromIngredient(fixtureMainA, 'bad'),
+      price: 'not-a-number'
+    } as unknown as TIngredientInstance;
+    state = reducer(state, addIngredient(badPrice));
+    // total should remain 40 because bad price counts as 0
+    expect(state.total).toBe(40);
+  });
+
+  it('addIngredient generates uniqueId when missing and preserves provided uniqueId/_uid/uid', () => {
+    let state = reducer(undefined, clearConstructor());
+
+    // no uniqueId/_uid/uid provided -> uniqueId should be generated
+    const noUid = {
+      _id: 'x1',
+      type: 'main',
+      price: 1
+    } as unknown as TIngredientInstance;
+    state = reducer(state, addIngredient(noUid));
+    expect(state.ingredients.length).toBeGreaterThanOrEqual(1);
+    const first = state.ingredients[0];
+    expect(first).toBeDefined();
+    expect(typeof first?.uniqueId).toBe('string');
+
+    // provided uniqueId should be used unchanged
+    const provided = {
+      _id: 'x2',
+      type: 'main',
+      price: 2,
+      uniqueId: 'EXISTING'
+    } as unknown as TIngredientInstance;
+    state = reducer(state, addIngredient(provided));
+    const found = state.ingredients.find((i) => i?.uniqueId === 'EXISTING');
+    expect(found).toBeDefined();
+
+    // provided _uid should be used as uniqueId
+    const with_uid = {
+      _id: 'x3',
+      _uid: 'MY_UID',
+      type: 'main',
+      price: 3
+    } as unknown as TIngredientInstance;
+    state = reducer(state, addIngredient(with_uid));
+    const foundUid = state.ingredients.find(
+      (i) => (i as TIngredientInstance | undefined)?._uid === 'MY_UID'
     );
-    const next = reducer(
+    expect(foundUid).toBeDefined();
+    expect(foundUid?.uniqueId).toBe('MY_UID');
+
+    // arbitrary 'uid' field should be recognized by getIds and used for removal
+    const with_arbitrary_uid: Partial<TIngredientInstance> & { uid: string } = {
+      _id: 'x4',
+      type: 'main',
+      price: 4,
+      uid: 'ARBIT'
+    };
+    state = reducer(
       state,
-      moveIngredient({ fromIndex: 0, toIndex: 1 } as any)
+      addIngredient(with_arbitrary_uid as unknown as TIngredientInstance)
     );
-    const after = next.ingredients.map(
-      (i: any) => i._id ?? i.uniqueId ?? JSON.stringify(i)
+    const added = state.ingredients.find(
+      (i) => (i as TIngredientInstance | undefined)?._id === 'x4'
     );
-    expect(after).not.toEqual(before);
+    expect(added).toBeDefined();
+
+    // now remove by that uid string
+    state = reducer(state, removeIngredient('ARBIT'));
+    expect(
+      state.ingredients.some(
+        (i) => (i as TIngredientInstance | undefined)?._id === 'x4'
+      )
+    ).toBe(false);
   });
 
-  /* bun / clear / edgecases */
-  describe('extra branches', () => {
-    /* bun */
-    it('setBun sets and clears bun and recalculates total', () => {
-      let state = reducer(undefined, { type: '@@INIT' } as any);
-      const bun = { _id: 'b1', type: 'bun', price: 10 } as any;
-      state = reducer(state, setBun(bun));
-      expect(state.bun?._id).toBe('b1');
-      expect(state.total).toBe(20);
+  it('removeIngredient supports number index, object payload { index }, object payload { uid } and filters undefined', () => {
+    let state = reducer(undefined, clearConstructor());
 
-      state = reducer(state, setBun(null));
-      expect(state.bun).toBeNull();
-      expect(state.total).toBe(0);
-    });
+    // add three ingredients
+    state = reducer(
+      state,
+      addIngredient(makeInstanceFromIngredient(fixtureMainA, '1'))
+    );
+    state = reducer(
+      state,
+      addIngredient(makeInstanceFromIngredient(fixtureMainB, '2'))
+    );
+    state = reducer(
+      state,
+      addIngredient(makeInstanceFromIngredient(fixtureMainA, '3'))
+    );
+    expect(state.ingredients.length).toBe(3);
 
-    /* remove by uid/object */
-    it('removeIngredient by object or uid', () => {
-      let state = reducer(undefined, { type: '@@INIT' } as any);
-      const item = { _id: 'i1', uniqueId: 'u1', price: 5, type: 'main' } as any;
-      state = reducer(state, addIngredient(item));
-      expect(state.ingredients.length).toBe(1);
+    // remove by numeric index
+    state = reducer(state, removeIngredient(1)); // removes second
+    expect(state.ingredients.length).toBe(2);
 
-      state = reducer(state, removeIngredient({ uid: 'u1' } as any));
-      expect(state.ingredients.length).toBe(0);
+    // add one item and remove by object { index }
+    state = reducer(
+      state,
+      addIngredient(makeInstanceFromIngredient(fixtureMainB, '4'))
+    );
+    const lenBefore = state.ingredients.length;
+    state = reducer(state, removeIngredient({ index: 0 }));
+    expect(state.ingredients.length).toBe(lenBefore - 1);
 
-      state = reducer(
-        state,
-        addIngredient({
-          _id: 'i2',
-          uniqueId: 'x1',
-          price: 2,
-          type: 'main'
-        } as any)
-      );
-      expect(state.ingredients.length).toBe(1);
-      state = reducer(state, removeIngredient('x1' as any));
-      expect(state.ingredients.length).toBe(0);
-    });
+    // add item with special uid and remove via object { uid }
+    const special = {
+      _id: 'spec',
+      type: 'main',
+      price: 5,
+      uniqueId: 'SPECUID'
+    } as unknown as TIngredientInstance;
+    state = reducer(state, addIngredient(special));
+    expect(
+      state.ingredients.some(
+        (i) => (i as TIngredientInstance | undefined)?.uniqueId === 'SPECUID'
+      )
+    ).toBe(true);
+    state = reducer(state, removeIngredient({ uid: 'SPECUID' }));
+    expect(
+      state.ingredients.some(
+        (i) => (i as TIngredientInstance | undefined)?.uniqueId === 'SPECUID'
+      )
+    ).toBe(false);
 
-    /* remove index out-of-range */
-    it('removeIngredient with invalid index is noop', () => {
-      let state = reducer(undefined, { type: '@@INIT' } as any);
-      const before = JSON.stringify(state);
-      state = reducer(state, removeIngredient(5 as any));
-      expect(JSON.stringify(state)).toBe(before);
-    });
+    // simulate undefined entries and ensure they are filtered out
+    type ConstructorState = ReturnType<typeof reducer>;
+    const badState: ConstructorState = {
+      bun: null,
+      ingredients: [
+        undefined,
+        { _id: 'x', type: 'main', price: 1 } as unknown as TIngredientInstance
+      ],
+      total: 1
+    };
+    const cleaned = reducer(
+      badState as unknown as ConstructorState,
+      removeIngredient(999)
+    ); // no-op, but reducer filters undefined
+    expect(cleaned.ingredients.every((it) => typeof it !== 'undefined')).toBe(
+      true
+    );
+  });
 
-    /* move invalid */
-    it('moveIngredient with invalid indexes is noop', () => {
-      let state = reducer(undefined, { type: '@@INIT' } as any);
-      state = reducer(
-        state,
-        addIngredient({ _id: 'i1', price: 1, type: 'main' } as any)
-      );
-      const before = JSON.stringify(state);
-      state = reducer(
-        state,
-        moveIngredient({ fromIndex: -1, toIndex: 10 } as any)
-      );
-      expect(JSON.stringify(state)).toBe(before);
-    });
+  it('moveIngredient performs valid moves and ignores invalid indices (no-op)', () => {
+    let state = reducer(undefined, clearConstructor());
+    state = reducer(
+      state,
+      addIngredient(makeInstanceFromIngredient(fixtureMainA, 'a'))
+    );
+    state = reducer(
+      state,
+      addIngredient(makeInstanceFromIngredient(fixtureMainB, 'b'))
+    );
+    state = reducer(
+      state,
+      addIngredient(makeInstanceFromIngredient(fixtureMainA, 'c'))
+    );
 
-    /* clear */
-    it('clearConstructor resets all', () => {
-      let state = reducer(undefined, { type: '@@INIT' } as any);
-      state = reducer(
-        state,
-        addIngredient({ _id: 'i1', price: 2, type: 'main' } as any)
-      );
-      state = reducer(
-        state,
-        setBun({ _id: 'b', price: 3, type: 'bun' } as any)
-      );
-      state = reducer(state, clearConstructor());
-      expect(state.bun).toBeNull();
-      expect(state.ingredients.length).toBe(0);
-      expect(state.total).toBe(0);
-    });
+    const beforeOrder = state.ingredients.map((i) => i?._id ?? null);
+    // valid move: 0 -> 2
+    state = reducer(state, moveIngredient({ fromIndex: 0, toIndex: 2 }));
+    const afterOrder = state.ingredients.map((i) => i?._id ?? null);
+    expect(afterOrder.length).toBe(beforeOrder.length);
+    expect(afterOrder).not.toEqual(beforeOrder);
 
-    /* remaining branches: remove by string, remove by index, move noop/mid-move */
-    it('remove by string uniqueId', () => {
-      let state = reducer(undefined, { type: '@@INIT' } as any);
-      state = reducer(
-        state,
-        addIngredient({
-          _id: 'ix1',
-          uniqueId: 's1',
-          price: 3,
-          type: 'main'
-        } as any)
-      );
-      expect(state.ingredients.length).toBe(1);
-      state = reducer(state, removeIngredient('s1' as any));
-      expect(state.ingredients.length).toBe(0);
-    });
+    // invalid moves should not throw and should be no-ops
+    const snapshot = state.ingredients.map((i) => i?._id ?? null);
+    state = reducer(state, moveIngredient({ fromIndex: -1, toIndex: 1 }));
+    state = reducer(state, moveIngredient({ fromIndex: 0, toIndex: 999 }));
+    expect(state.ingredients.map((i) => i?._id ?? null)).toEqual(snapshot);
+  });
 
-    it('remove by payload.index (valid)', () => {
-      let state = reducer(undefined, { type: '@@INIT' } as any);
-      state = reducer(
-        state,
-        addIngredient({ _id: 'i10', price: 1, type: 'main' } as any)
-      );
-      state = reducer(
-        state,
-        addIngredient({ _id: 'i11', price: 2, type: 'main' } as any)
-      );
-      expect(state.ingredients.length).toBe(2);
-      state = reducer(state, removeIngredient({ index: 0 } as any));
-      expect(state.ingredients.length).toBe(1);
-      const remaining = state.ingredients[0] as any;
-      expect(remaining._id === 'i11' || remaining.uniqueId).toBeTruthy();
-    });
+  it('clearConstructor resets bun, ingredients and total', () => {
+    let state = reducer(undefined, clearConstructor());
+    state = reducer(
+      state,
+      addIngredient(makeInstanceFromIngredient(fixtureMainA, 'z'))
+    );
+    state = reducer(state, setBun(makeInstanceFromIngredient(fixtureBun, 'z')));
+    expect(state.ingredients.length).toBeGreaterThan(0);
+    expect(state.bun).not.toBeNull();
 
-    it('moveIngredient noop and mid-move', () => {
-      let state = reducer(undefined, { type: '@@INIT' } as any);
-      state = reducer(
-        state,
-        addIngredient({ _id: 'm1', price: 1, type: 'main' } as any)
-      );
-      state = reducer(
-        state,
-        addIngredient({ _id: 'm2', price: 2, type: 'main' } as any)
-      );
-      state = reducer(
-        state,
-        addIngredient({ _id: 'm3', price: 3, type: 'main' } as any)
-      );
-      const before = state.ingredients.map(
-        (i: any) => i._id ?? i.uniqueId ?? JSON.stringify(i)
-      );
-      state = reducer(
-        state,
-        moveIngredient({ fromIndex: 1, toIndex: 1 } as any)
-      );
-      const afterNoop = state.ingredients.map(
-        (i: any) => i._id ?? i.uniqueId ?? JSON.stringify(i)
-      );
-      expect(afterNoop).toEqual(before);
-
-      state = reducer(
-        state,
-        moveIngredient({ fromIndex: 0, toIndex: 2 } as any)
-      );
-      const after = state.ingredients.map(
-        (i: any) => i._id ?? i.uniqueId ?? JSON.stringify(i)
-      );
-      expect(after).not.toEqual(before);
-      expect(after[2]).toMatch(/m1/);
-    });
+    state = reducer(state, clearConstructor());
+    expect(state).toEqual({ bun: null, ingredients: [], total: 0 });
   });
 });

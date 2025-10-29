@@ -11,6 +11,8 @@ jest.mock('../utils/burger-api', () => ({
 import { getCookie } from '../utils/cookie';
 import { fetchWithRefresh } from '../utils/burger-api';
 import reducer, { fetchUser, logout } from '../features/user/userSlice';
+import type { RootState } from '../services/store';
+import { makeThunkDispatchMock } from '../test-utils/makeThunkDispatchMock';
 
 describe('user.fetchUser thunk — дополнительные ветви', () => {
   afterEach(() => {
@@ -19,14 +21,15 @@ describe('user.fetchUser thunk — дополнительные ветви', () 
 
   it('rejects когда нет токена', async () => {
     (getCookie as jest.Mock).mockReturnValue('');
-    const dispatch = jest.fn();
-    const getState = jest.fn();
 
-    const result: any = await fetchUser()(
-      dispatch as any,
-      getState as any,
+    const dispatch = makeThunkDispatchMock<RootState>();
+
+    const result = await fetchUser()(
+      dispatch,
+      () => ({}) as RootState,
       undefined
     );
+
     expect(result.type).toBe(fetchUser.rejected.type);
     expect(result.payload).toBe('Нет токена');
   });
@@ -37,14 +40,14 @@ describe('user.fetchUser thunk — дополнительные ветви', () 
       user: { name: 'A', email: 'a@a' }
     });
 
-    const dispatch = jest.fn();
-    const getState = jest.fn();
+    const dispatch = makeThunkDispatchMock<RootState>();
 
-    const result: any = await fetchUser()(
-      dispatch as any,
-      getState as any,
+    const result = await fetchUser()(
+      dispatch,
+      () => ({}) as RootState,
       undefined
     );
+
     expect(result.type).toBe(fetchUser.fulfilled.type);
     expect(result.payload).toEqual({ name: 'A', email: 'a@a' });
   });
@@ -53,19 +56,18 @@ describe('user.fetchUser thunk — дополнительные ветви', () 
     (getCookie as jest.Mock).mockReturnValue('tok');
     (fetchWithRefresh as jest.Mock).mockRejectedValue(new Error('net err'));
 
-    const dispatch = jest.fn();
-    const getState = jest.fn();
+    const dispatch = makeThunkDispatchMock<RootState>();
 
-    const result: any = await fetchUser()(
-      dispatch as any,
-      getState as any,
+    const result = await fetchUser()(
+      dispatch,
+      () => ({}) as RootState,
       undefined
     );
     expect(result.type).toBe(fetchUser.rejected.type);
 
     // Проверяем, что logout был диспатчен
-    const dispatched = (dispatch as jest.Mock).mock.calls.map(
-      (c) => c[0]?.type
+    const dispatched = (dispatch as unknown as jest.Mock).mock.calls.map(
+      (c) => (c[0] as { type?: string } | undefined)?.type
     );
     expect(dispatched).toContain(logout.type);
 

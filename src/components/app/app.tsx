@@ -9,6 +9,7 @@ import {
 } from 'react-router-dom';
 
 import { useSelector, useDispatch } from '../../services/store';
+import type { RootState } from '../../services/store';
 
 import { ConstructorPage } from '../../pages/constructor-page';
 import { Feed } from '../../pages/feed';
@@ -31,13 +32,15 @@ import { ModalUI } from '../ui/modal/modal';
 import { IngredientDetailsUI } from '../ui/ingredient-details';
 import { OrderInfoUI } from '../ui/order-info/order-info';
 
+import type { TIngredient, TOrder } from '@utils-types';
+
 import '../../index.css';
 import styles from './app.module.css';
 
 /* helper — перейти на background (path+search+state) */
 const navigateToBackground = (
   navigate: ReturnType<typeof useNavigate>,
-  bg: any,
+  bg: { pathname?: string; search?: string; state?: unknown } | undefined,
   replace = true
 ) => {
   if (!bg) {
@@ -50,18 +53,36 @@ const navigateToBackground = (
   navigate(pathname + search, { replace, state });
 };
 
+/* Помощь: безопасно извлечь background из location.state */
+function getBackgroundFromLocationState(
+  locState: unknown
+): { pathname?: string; search?: string; state?: unknown } | undefined {
+  if (locState && typeof locState === 'object') {
+    const record = locState as Record<string, unknown>;
+    const b = record.background;
+    if (b && typeof b === 'object') {
+      return b as { pathname?: string; search?: string; state?: unknown };
+    }
+  }
+  return undefined;
+}
+
 /* Страница ингредиента (полный экран) */
 const IngredientPage: React.FC = () => {
-  const { id } = useParams();
+  const { id } = useParams<{ id?: string }>();
   const dispatch = useDispatch();
-  const ingredients = useSelector((s: any) => s.ingredients.items || []);
-  const isLoading = useSelector((s: any) => s.ingredients.isLoading);
+  const ingredients = useSelector(
+    (state: RootState) => state.ingredients.items ?? ([] as TIngredient[])
+  );
+  const isLoading = useSelector(
+    (state: RootState) => state.ingredients.isLoading ?? false
+  );
 
   useEffect(() => {
     if (!ingredients.length) dispatch(fetchIngredients());
   }, [dispatch, ingredients.length]);
 
-  const ingredient = ingredients.find((it: any) => it._id === id);
+  const ingredient = ingredients.find((it) => it._id === id);
 
   if (isLoading || !ingredients.length) return <Preloader />;
   if (!ingredient)
@@ -80,17 +101,19 @@ const IngredientPage: React.FC = () => {
 
 /* Модалка ингредиента (overlay) */
 const IngredientModal: React.FC = () => {
-  const { id } = useParams();
+  const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const ingredients = useSelector((s: any) => s.ingredients.items || []);
-  const ingredient = ingredients.find((it: any) => it._id === id);
+  const ingredients = useSelector(
+    (state: RootState) => state.ingredients.items ?? ([] as TIngredient[])
+  );
+  const ingredient = ingredients.find((it) => it._id === id);
 
   if (!ingredient) return null;
 
   const handleClose = () => {
-    const state = (location && (location as any).state) || {};
-    const bg = state.background;
+    const locState = location.state as unknown;
+    const bg = getBackgroundFromLocationState(locState);
     if (bg) {
       navigateToBackground(navigate, bg, true);
       return;
@@ -111,40 +134,62 @@ const OrderInfoModal: React.FC = () => {
   const location = useLocation();
   const params = useParams<{ number?: string }>();
 
-  const navState = (location && (location as any).state) || {};
-  const navOrder = navState.order;
+  const navState = location.state as unknown;
+  const navOrderCandidate = (
+    navState && typeof navState === 'object'
+      ? (navState as Record<string, unknown>).order
+      : undefined
+  ) as unknown;
   const navOrderIsObject =
-    navOrder &&
-    typeof navOrder === 'object' &&
-    ('number' in navOrder || 'id' in navOrder || '_id' in navOrder);
-  const orderFromNav = navOrderIsObject ? navOrder : null;
+    navOrderCandidate &&
+    typeof navOrderCandidate === 'object' &&
+    ('number' in (navOrderCandidate as Record<string, unknown>) ||
+      'id' in (navOrderCandidate as Record<string, unknown>) ||
+      '_id' in (navOrderCandidate as Record<string, unknown>));
+  const orderFromNav = navOrderIsObject ? (navOrderCandidate as TOrder) : null;
 
-  const profileOrders = useSelector((s: any) => s.profileOrders.orders || []);
-  const feedOrders = useSelector((s: any) => s.feed?.orders || []);
-  const orderModalData = useSelector((s: any) => s.order?.orderModalData);
+  const profileOrders = useSelector(
+    (state: RootState) => state.profileOrders.orders ?? ([] as TOrder[])
+  );
+  const feedOrders = useSelector(
+    (state: RootState) => state.feed?.orders ?? ([] as TOrder[])
+  );
+  const orderModalData = useSelector(
+    (state: RootState) => state.order?.orderModalData
+  ) as { order?: TOrder } | undefined;
   const orderFromStore = orderModalData?.order ?? null;
 
   const paramNumber = params.number ?? null;
 
   const orderFromProfile =
-    profileOrders.find(
-      (o: any) =>
-        String(o.number) === String(paramNumber) ||
-        String(o._id) === String(paramNumber) ||
-        (orderFromNav &&
-          (String(o._id) === String(orderFromNav._id) ||
-            String(o.number) === String(orderFromNav.number)))
-    ) ?? null;
+    profileOrders.find((o) => {
+      if (!o) return false;
+      const oNumber = o.number ?? o._id;
+      if (!paramNumber) return false;
+      if (oNumber !== undefined && String(oNumber) === String(paramNumber))
+        return true;
+      if (
+        orderFromNav &&
+        ((o._id && String(o._id) === String(orderFromNav._id)) ||
+          (o.number && String(o.number) === String(orderFromNav.number)))
+      )
+        return true;
+      return false;
+    }) ?? null;
 
   const order = orderFromNav ?? orderFromProfile ?? orderFromStore ?? null;
 
   if (!order) return null;
 
-  const ingredients: any[] = useSelector((s: any) => s.ingredients.items || []);
+  const ingredients = useSelector(
+    (state: RootState) => state.ingredients.items ?? ([] as TIngredient[])
+  );
 
-  type TIngredientsWithCount = { [key: string]: any & { count: number } };
+  type TIngredientsWithCount = {
+    [key: string]: TIngredient & { count: number };
+  };
 
-  const ingredientsInfo = (order.ingredients || []).reduce(
+  const ingredientsInfo = (order.ingredients ?? []).reduce(
     (acc: TIngredientsWithCount, id: string) => {
       if (!acc[id]) {
         const ingredient = ingredients.find((ing) => ing._id === id);
@@ -158,7 +203,8 @@ const OrderInfoModal: React.FC = () => {
   );
 
   const total = Object.values(ingredientsInfo).reduce(
-    (acc: number, item: any) => acc + (item.price || 0) * item.count,
+    (acc: number, item: TIngredient & { count: number }) =>
+      acc + (item.price ?? 0) * item.count,
     0
   );
 
@@ -172,20 +218,19 @@ const OrderInfoModal: React.FC = () => {
   };
 
   const handleClose = () => {
-    const state = (location && (location as any).state) || {};
-    const bg = state.background;
-
+    const locState = location.state as unknown;
+    const bg = getBackgroundFromLocationState(locState);
     if (bg) {
       navigateToBackground(navigate, bg, true);
       return;
     }
 
-    if (profileOrders && profileOrders.length > 0) {
+    if (profileOrders.length > 0) {
       navigate('/profile/orders', { replace: true });
       return;
     }
 
-    if (feedOrders && feedOrders.length > 0) {
+    if (feedOrders.length > 0) {
       navigate('/feed', { replace: true });
       return;
     }
@@ -203,22 +248,28 @@ const OrderInfoModal: React.FC = () => {
 /* Прямая страница заказа /feed/:number */
 const OrderInfoUIWrapper: React.FC = () => {
   const params = useParams<{ number?: string }>();
-  const profileOrders = useSelector((s: any) => s.profileOrders.orders || []);
-  const ingredients: any[] = useSelector((s: any) => s.ingredients.items || []);
+  const profileOrders = useSelector(
+    (state: RootState) => state.profileOrders.orders ?? ([] as TOrder[])
+  );
+  const ingredients = useSelector(
+    (state: RootState) => state.ingredients.items ?? ([] as TIngredient[])
+  );
 
   const raw = params.number ?? null;
   if (!raw) return <NotFound404 />;
 
   const order =
-    profileOrders.find(
-      (o: any) =>
-        String(o.number) === String(raw) || String(o._id) === String(raw)
-    ) ?? null;
+    profileOrders.find((o) => {
+      if (!o) return false;
+      return String(o.number) === String(raw) || String(o._id) === String(raw);
+    }) ?? null;
 
   if (!order) return <Preloader />;
 
-  type TIngredientsWithCount = { [key: string]: any & { count: number } };
-  const ingredientsInfo = (order.ingredients || []).reduce(
+  type TIngredientsWithCount = {
+    [key: string]: TIngredient & { count: number };
+  };
+  const ingredientsInfo = (order.ingredients ?? []).reduce(
     (acc: TIngredientsWithCount, id: string) => {
       if (!acc[id]) {
         const ingredient = ingredients.find((ing) => ing._id === id);
@@ -232,7 +283,8 @@ const OrderInfoUIWrapper: React.FC = () => {
   );
 
   const total = Object.values(ingredientsInfo).reduce(
-    (acc: number, item: any) => acc + (item.price || 0) * item.count,
+    (acc: number, item: TIngredient & { count: number }) =>
+      acc + (item.price ?? 0) * item.count,
     0
   );
 
@@ -255,13 +307,11 @@ const OrderInfoUIWrapper: React.FC = () => {
 /* Роуты + overlays */
 const AppRoutes: React.FC = () => {
   const location = useLocation();
-  // background если открыт overlay
-  // @ts-ignore
-  const background = location.state && (location.state as any).background;
+  const bg = getBackgroundFromLocationState(location.state as unknown);
 
   return (
     <>
-      <Routes location={background || location}>
+      <Routes location={bg ?? location}>
         <Route path='/' element={<ConstructorPage />} />
         <Route path='/feed' element={<Feed />} />
         <Route
@@ -293,7 +343,7 @@ const AppRoutes: React.FC = () => {
         <Route path='*' element={<NotFound404 />} />
       </Routes>
 
-      {background && (
+      {bg && (
         <Routes>
           <Route path='/ingredients/:id' element={<IngredientModal />} />
           <Route path='/feed/:number' element={<OrderInfoModal />} />
@@ -310,7 +360,9 @@ const AppRoutes: React.FC = () => {
 /* Корневой компонент */
 const App: React.FC = () => {
   const dispatch = useDispatch();
-  const isUserLoaded = useSelector((s: any) => s.user.isUserLoaded);
+  const isUserLoaded = useSelector(
+    (state: RootState) => state.user.isUserLoaded ?? false
+  );
 
   useEffect(() => {
     if (!isUserLoaded) dispatch(fetchUser());

@@ -1,12 +1,12 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
-type TIngredientInstance = {
+export type TIngredientInstance = {
   _id?: string;
   uniqueId?: string;
   _uid?: string;
   type?: string;
   price?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 type TConstructorState = {
@@ -24,15 +24,47 @@ const initialState: TConstructorState = {
 type TRemovePayload = string | { uid?: string; index?: number } | number;
 type TMovePayload = { fromIndex: number; toIndex: number };
 
-const recalcTotal = (state: TConstructorState) => {
-  state.total =
-    (state.bun ? (state.bun.price || 0) * 2 : 0) +
-    state.ingredients.reduce((s, v) => s + (v?.price || 0), 0);
+/* --- helpers --- */
+const toNumber = (v: unknown): number => {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
 };
 
 const genUniqueId = (base?: string) =>
   `${base || 'item'}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
+/**
+ * Безопасно собирает возможные id/uid-поля из TIngredientInstance
+ */
+const getIds = (it: TIngredientInstance | undefined): string[] => {
+  if (!it) return [];
+  const rec = it as Record<string, unknown>;
+  const candidates: Array<string | undefined> = [];
+
+  if (typeof it.uniqueId === 'string') candidates.push(it.uniqueId);
+  if (typeof it._uid === 'string') candidates.push(it._uid);
+  // поле 'uid' может быть неизвестно в типе, берём через индексную подпись и проверяем
+  const extraUid = rec.uid;
+  if (typeof extraUid === 'string') candidates.push(extraUid);
+  if (typeof it._id === 'string') candidates.push(it._id);
+
+  return candidates.filter(Boolean) as string[];
+};
+
+const recalcTotal = (state: TConstructorState) => {
+  const bunPrice = state.bun ? toNumber(state.bun.price) : 0;
+  const ingredientsSum = state.ingredients.reduce(
+    (s, v) => s + toNumber(v?.price),
+    0
+  );
+  state.total = bunPrice * 2 + ingredientsSum;
+};
+
+/* --- slice --- */
 const constructorItemsSlice = createSlice({
   name: 'constructorItems',
   initialState,
@@ -42,11 +74,18 @@ const constructorItemsSlice = createSlice({
       if (!item) return;
 
       if (item.type === 'bun') {
+        // клонируем объект (чтобы не хранить ссылку на payload)
         state.bun = { ...item };
       } else {
         const instance: TIngredientInstance = { ...item };
+        // безопасно получить base для генерирования id
+        const base =
+          typeof instance._id === 'string' ? instance._id : undefined;
+        // instance.uniqueId/_uid уже typed как string | undefined, поэтому можно использовать напрямую
         instance.uniqueId =
-          instance.uniqueId || instance._uid || genUniqueId(instance._id);
+          (typeof instance.uniqueId === 'string' && instance.uniqueId) ||
+          (typeof instance._uid === 'string' && instance._uid) ||
+          genUniqueId(base);
         state.ingredients.push(instance);
       }
       recalcTotal(state);
@@ -54,10 +93,6 @@ const constructorItemsSlice = createSlice({
 
     removeIngredient(state, action: PayloadAction<TRemovePayload>) {
       const payload = action.payload;
-
-      // helper to get any id candidates from an ingredient safely
-      const getIds = (it: TIngredientInstance | undefined) =>
-        [it?.uniqueId, it?._uid, it?.uid, it?._id].filter(Boolean) as string[];
 
       if (typeof payload === 'number') {
         const idx = payload;
@@ -76,7 +111,7 @@ const constructorItemsSlice = createSlice({
           if (index >= 0 && index < state.ingredients.length) {
             state.ingredients.splice(index, 1);
           }
-        } else if (uid) {
+        } else if (typeof uid === 'string') {
           state.ingredients = state.ingredients.filter((it) => {
             const ids = getIds(it);
             return !ids.includes(uid);
@@ -84,6 +119,7 @@ const constructorItemsSlice = createSlice({
         }
       }
 
+      // убрать undefined элементы (если они были)
       state.ingredients = state.ingredients.filter(
         (it) => typeof it !== 'undefined'
       );

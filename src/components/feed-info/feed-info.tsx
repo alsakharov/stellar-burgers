@@ -17,11 +17,12 @@ export const FeedInfo: FC = () => {
   const readyOrders = getOrders(orders, 'done');
   const pendingOrders = getOrders(orders, 'pending');
 
+  // Передаём полный объект, соответствующий типу FeedInfoUIProps.feed
   return (
     <FeedInfoUI
       readyOrders={readyOrders}
       pendingOrders={pendingOrders}
-      feed={{ total, totalToday }}
+      feed={{ orders, total, totalToday }}
     />
   );
 };

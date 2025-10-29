@@ -1,4 +1,3 @@
-// mocks: api + cookie
 jest.mock('../utils/burger-api', () => ({
   fetchWithRefresh: jest.fn()
 }));
@@ -16,6 +15,8 @@ import {
   fetchUser,
   logout
 } from '../features/user/userSlice';
+import type { RootState } from '../services/store';
+import { makeThunkDispatchMock } from '../test-utils/makeThunkDispatchMock';
 
 describe('user thunks', () => {
   afterEach(() => {
@@ -26,7 +27,6 @@ describe('user thunks', () => {
 
   it('registerUser saves tokens and returns user', async () => {
     // arrange
-    // @ts-ignore
     (fetchWithRefresh as jest.Mock).mockResolvedValue({
       success: true,
       user: { name: 'U', email: 'u@u' },
@@ -35,11 +35,10 @@ describe('user thunks', () => {
     });
 
     // act
-    const dispatchMock = jest.fn();
-    // @ts-ignore
+    const dispatch = makeThunkDispatchMock<RootState>();
     const res = await registerUser({ name: 'u', email: 'e', password: 'p' })(
-      dispatchMock,
-      () => ({}),
+      dispatch,
+      () => ({}) as RootState,
       undefined
     );
 
@@ -51,7 +50,6 @@ describe('user thunks', () => {
   });
 
   it('loginUser saves tokens and returns user', async () => {
-    // @ts-ignore
     (fetchWithRefresh as jest.Mock).mockResolvedValue({
       success: true,
       user: { name: 'L', email: 'l@l' },
@@ -59,11 +57,10 @@ describe('user thunks', () => {
       refreshToken: 'rt2'
     });
 
-    const dispatchMock = jest.fn();
-    // @ts-ignore
+    const dispatch = makeThunkDispatchMock<RootState>();
     const res = await loginUser({ email: 'l@l', password: 'p' })(
-      dispatchMock,
-      () => ({}),
+      dispatch,
+      () => ({}) as RootState,
       undefined
     );
 
@@ -74,23 +71,27 @@ describe('user thunks', () => {
 
   it('fetchUser rejects when no token', async () => {
     (getCookie as jest.Mock).mockReturnValue(undefined);
-    const dispatchMock = jest.fn();
-    // @ts-ignore
-    const res = await fetchUser()(dispatchMock, () => ({}), undefined);
+
+    const dispatch = makeThunkDispatchMock<RootState>();
+    const res = await fetchUser()(dispatch, () => ({}) as RootState, undefined);
+
     expect(res.type).toMatch(/\/rejected$/);
     expect(res.payload).toBe('Нет токена');
   });
 
   it('fetchUser on fetch error dispatches logout and rejects', async () => {
     (getCookie as jest.Mock).mockReturnValue('tok');
-    // @ts-ignore
     (fetchWithRefresh as jest.Mock).mockRejectedValue(new Error('401'));
-    const dispatchMock = jest.fn();
-    // @ts-ignore
-    const res = await fetchUser()(dispatchMock, () => ({}), undefined);
-    expect(
-      dispatchMock.mock.calls.some((c) => c[0] && c[0].type === logout().type)
-    ).toBe(true);
+
+    const dispatch = makeThunkDispatchMock<RootState>();
+    const res = await fetchUser()(dispatch, () => ({}) as RootState, undefined);
+
+    // Проверяем, что logout был диспатчен
+    const dispatchedTypes = (dispatch as unknown as jest.Mock).mock.calls.map(
+      (c) => (c[0] as { type?: string } | undefined)?.type
+    );
+    expect(dispatchedTypes.some((t) => t === logout().type)).toBe(true);
+
     expect(res.type).toMatch(/\/rejected$/);
   });
 });

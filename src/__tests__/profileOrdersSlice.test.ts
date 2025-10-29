@@ -1,3 +1,4 @@
+import { Action } from 'redux';
 import reducer, {
   wsConnect,
   wsDisconnect,
@@ -6,20 +7,18 @@ import reducer, {
   setSelectedOrder,
   clearSelectedOrder
 } from '../features/profileOrders/profileOrdersSlice';
+import type { TOrder } from '../utils/types';
+import { createOrder as createOrderFixture } from '../test-utils/factories/createOrder';
 
 describe('profileOrders slice', () => {
-  const initial = reducer(undefined, { type: '@@INIT' } as any);
+  const initial = reducer(undefined, { type: '@@INIT' } as Action);
 
-  // минимальная корректная заглушка Order
-  const orderStub = {
+  // минимальная корректная заглушка Order, теперь через фабрику
+  const orderStub: TOrder = createOrderFixture({
     _id: 'o1',
     number: 1,
-    name: 'Test Order',
-    status: 'done',
-    ingredients: ['ing1', 'ing2'],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
+    name: 'Test Order'
+  });
 
   it('init state', () => {
     expect(initial).toHaveProperty('orders');
@@ -33,8 +32,10 @@ describe('profileOrders slice', () => {
   });
 
   it('wsDisconnect sets wsConnected false and keeps orders', () => {
-    const withOrders = { ...initial, orders: [orderStub] };
-    const next = reducer(withOrders as any, wsDisconnect());
+    const withOrders = { ...initial, orders: [orderStub] } as ReturnType<
+      typeof reducer
+    >;
+    const next = reducer(withOrders, wsDisconnect());
     expect(next.wsConnected).toBe(false);
     expect(next.orders.length).toBe(1);
     expect(next.orders[0]._id).toBe(orderStub._id);
@@ -46,18 +47,15 @@ describe('profileOrders slice', () => {
   });
 
   it('wsMessage writes orders/total/totalToday', () => {
+    const orderFromFixture = createOrderFixture({
+      _id: 'x',
+      number: 2,
+      name: 'Another Order',
+      status: 'pending'
+    });
+
     const payload = {
-      orders: [
-        {
-          _id: 'x',
-          number: 2,
-          name: 'Another Order',
-          status: 'pending',
-          ingredients: ['ingA'],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      ],
+      orders: [orderFromFixture],
       total: 9,
       totalToday: 1
     };

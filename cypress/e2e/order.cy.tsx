@@ -1,11 +1,47 @@
 /// <reference types="cypress" />
 import { expect as chaiExpect } from 'chai';
 
+type IngredientType = 'bun' | 'main' | 'sauce' | string;
+
+interface Ingredient {
+  _id?: string;
+  id?: string;
+  name: string;
+  type: IngredientType;
+  [key: string]: unknown;
+}
+
+interface IngredientsFixture {
+  data: Ingredient[];
+}
+
+/** Минимальная форма ожидаемого состояния приложения, достаточная для теста */
+interface AppState {
+  constructorItems?: {
+    ingredients?: unknown[];
+    bun?: unknown | null;
+  };
+  [k: string]: unknown;
+}
+
+/** Интерфейс окна приложения  */
+interface AppWindow {
+  __STORE__?: {
+    getState?: () => unknown;
+    [k: string]: unknown;
+  };
+  [k: string]: unknown;
+}
+
 describe('E2E: оформление заказа — по ТЗ (моки, проверка номера, закрытие модалки, очистка)', () => {
-  const constructorList = '[data-cy="ingredient_constructor"], [data-cy="ingredients_list"], [data-cy="constructor_ingredients"]';
-  const orderButton = '[data-cy=order_button]';
-  const modalCloseSelectors = '[data-cy="modal-close"], button[aria-label="close"], .modal__close, .close-button';
-  const modalRoot = 'div[role="dialog"], [data-cy="modal"], .modal, .Modal';
+  const S = {
+    constructorList:
+      '[data-cy="ingredient_constructor"], [data-cy="ingredients_list"], [data-cy="constructor_ingredients"]',
+    orderButton: '[data-cy=order_button]',
+    modalCloseSelectors: '[data-cy="modal-close"], button[aria-label="close"], .modal__close, .close-button',
+    modalRoot: 'div[role="dialog"], [data-cy="modal"], .modal, .Modal',
+  };
+
   const ingredientDetailsTitleRx = /Детали ингредиента|Ingredient details/i;
 
   before(() => {
@@ -26,8 +62,8 @@ describe('E2E: оформление заказа — по ТЗ (моки, про
 
   const closeIngredientDetailsIfOpen = () =>
     cy.get('body').then(($b) => {
-      if ($b.find(modalCloseSelectors).length) {
-        cy.get(modalCloseSelectors).first().click({ force: true });
+      if ($b.find(S.modalCloseSelectors).length) {
+        cy.get(S.modalCloseSelectors).first().click({ force: true });
       } else {
         cy.get('body').type('{esc}');
       }
@@ -52,20 +88,20 @@ describe('E2E: оформление заказа — по ТЗ (моки, про
     });
 
   it('создание заказа: мок, проверка номера, закрытие модалки и очистка конструктора', () => {
-    cy.fixture('ingredients.json').then((fx: any) => {
-      const items = fx.data || [];
-      const bun = items.find((it: any) => it.type === 'bun');
-      const filling = items.find((it: any) => it.type === 'main' || it.type === 'sauce');
+    cy.fixture<IngredientsFixture>('ingredients.json').then((fx) => {
+      const items = fx?.data ?? [];
+      const bun = items.find((it) => it.type === 'bun');
+      const filling = items.find((it) => it.type === 'main' || it.type === 'sauce');
       chaiExpect(bun).to.exist;
 
-      addIngredientFromFixture(bun.name);
+      addIngredientFromFixture(bun!.name);
       if (filling) addIngredientFromFixture(filling.name);
     });
 
-    cy.get(constructorList, { timeout: 10000 }).children().its('length').should('be.gte', 1);
+    cy.get(S.constructorList, { timeout: 10000 }).children().its('length').should('be.gte', 1);
     cy.contains(ingredientDetailsTitleRx).should('not.exist');
 
-    cy.get(orderButton, { timeout: 10000 }).contains(/Оформить заказ|Place order/i).click({ force: true });
+    cy.get(S.orderButton, { timeout: 10000 }).contains(/Оформить заказ|Place order/i).click({ force: true });
 
     cy.wait('@createOrder').then((interception) => {
       const status = interception.response?.statusCode;
@@ -84,31 +120,33 @@ describe('E2E: оформление заказа — по ТЗ (моки, про
       }
 
       cy.get('body').then(($b) => {
-        if ($b.find(modalCloseSelectors).length) {
-          cy.get(modalCloseSelectors).first().click({ force: true });
+        if ($b.find(S.modalCloseSelectors).length) {
+          cy.get(S.modalCloseSelectors).first().click({ force: true });
         } else {
           cy.get('body').type('{esc}');
         }
       });
-      cy.get(modalRoot, { timeout: 10000 }).should('not.exist');
+      cy.get(S.modalRoot, { timeout: 10000 }).should('not.exist');
 
       // даём немного времени на обработку стора/рендера
       cy.wait(200);
 
       // проверка очистки конструктора: сначала через window.__STORE__, иначе UI (ждём до 20s)
       cy.window({ timeout: 10000 }).then((win) => {
-        const store = (win as any).__STORE__;
+        const appWin = win as unknown as AppWindow;
+        const store = appWin.__STORE__;
         if (store && typeof store.getState === 'function') {
-          const state = store.getState();
+          const state = store.getState() as unknown as AppState;
           chaiExpect(state).to.have.property('constructorItems');
-          chaiExpect(state.constructorItems.ingredients).to.be.an('array').and.have.length(0);
-          chaiExpect(state.constructorItems.bun === null || state.constructorItems.bun === undefined).to.be.true;
+          // безопасно читаем поля через AppState
+          chaiExpect(state.constructorItems?.ingredients).to.be.an('array').and.have.length(0);
+          chaiExpect(state.constructorItems?.bun === null || state.constructorItems?.bun === undefined).to.be.true;
           return;
         }
 
         // UI fallback
         cy.log('Fallback: ждём очистки UI конструктора (до 20s)');
-        cy.get(constructorList, { timeout: 20000 }).children().then(($children) => {
+        cy.get(S.constructorList, { timeout: 20000 }).children().then(($children) => {
           const len = $children.length;
           chaiExpect(len === 0 || len === 1).to.equal(true);
         });

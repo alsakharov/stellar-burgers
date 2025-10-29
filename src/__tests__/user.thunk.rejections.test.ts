@@ -15,6 +15,8 @@ import {
   loginUser,
   updateUser
 } from '../features/user/userSlice';
+import type { RootState } from '../services/store';
+import { makeThunkDispatchMock } from '../test-utils/makeThunkDispatchMock';
 
 describe('user thunks — rejection branches', () => {
   afterEach(() => {
@@ -23,39 +25,45 @@ describe('user thunks — rejection branches', () => {
 
   it('registerUser rejected when fetchWithRefresh throws', async () => {
     (fetchWithRefresh as jest.Mock).mockRejectedValue(new Error('net fail'));
-    const dispatch = jest.fn();
-    const getState = jest.fn();
-    const res: any = await registerUser({
+
+    const dispatch = makeThunkDispatchMock<RootState>();
+
+    const res = await registerUser({
       name: 'A',
       email: 'a@a',
       password: 'p'
-    } as any)(dispatch as any, getState as any, undefined);
+    })(dispatch, () => ({}) as RootState, undefined);
+
     expect(res.type).toBe(registerUser.rejected.type);
     expect(res.payload).toBeDefined();
   });
 
   it('loginUser rejected when fetchWithRefresh throws', async () => {
     (fetchWithRefresh as jest.Mock).mockRejectedValue(new Error('net fail'));
-    const dispatch = jest.fn();
-    const getState = jest.fn();
-    const res: any = await loginUser({ email: 'a@a', password: 'p' } as any)(
-      dispatch as any,
-      getState as any,
+
+    const dispatch = makeThunkDispatchMock<RootState>();
+
+    const res = await loginUser({ email: 'a@a', password: 'p' })(
+      dispatch,
+      () => ({}) as RootState,
       undefined
     );
+
     expect(res.type).toBe(loginUser.rejected.type);
     expect(res.payload).toBeDefined();
   });
 
   it('updateUser rejected when fetchWithRefresh throws', async () => {
     (fetchWithRefresh as jest.Mock).mockRejectedValue(new Error('net fail'));
-    const dispatch = jest.fn();
-    const getState = jest.fn();
-    const res: any = await updateUser({ name: 'New' } as any)(
-      dispatch as any,
-      getState as any,
+
+    const dispatch = makeThunkDispatchMock<RootState>();
+
+    const res = await updateUser({ name: 'New' })(
+      dispatch,
+      () => ({}) as RootState,
       undefined
     );
+
     expect(res.type).toBe(updateUser.rejected.type);
     expect(res.payload).toBeDefined();
   });
@@ -67,13 +75,15 @@ describe('user thunks — rejection branches', () => {
       success: true,
       user: { name: 'U', email: 'u@u' }
     });
-    const dispatch = jest.fn();
-    const getState = jest.fn();
-    const res: any = await updateUser({ name: 'U' } as any)(
-      dispatch as any,
-      getState as any,
+
+    const dispatch = makeThunkDispatchMock<RootState>();
+
+    const res = await updateUser({ name: 'U' })(
+      dispatch,
+      () => ({}) as RootState,
       undefined
     );
+
     expect(res.type).toBe(updateUser.fulfilled.type);
     expect(res.payload).toEqual({ name: 'U', email: 'u@u' });
   });

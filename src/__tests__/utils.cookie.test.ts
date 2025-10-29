@@ -29,8 +29,8 @@ describe('cookie utils', () => {
     if (originalDescriptor) {
       Object.defineProperty(document, 'cookie', originalDescriptor);
     } else {
-      // @ts-ignore
-      delete (document as any).cookie;
+      // удаляем определённое тестом свойство cookie безопасным приведением
+      delete (document as unknown as Record<string, unknown>).cookie;
     }
   });
 

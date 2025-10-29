@@ -1,5 +1,8 @@
+import type { TOrdersData } from '../../../utils/types';
+
 export type FeedInfoUIProps = {
-  feed: any;
+  // базовые поля orders/total/totalToday + возможные флаги загрузки/ошибки
+  feed: TOrdersData & { isLoading?: boolean; error?: string | null };
   readyOrders: number[];
   pendingOrders: number[];
 };

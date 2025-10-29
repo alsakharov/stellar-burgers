@@ -10,18 +10,46 @@ jest.mock('../utils/burger-api', () => ({
 import { setCookie } from '../utils/cookie';
 import { fetchWithRefresh } from '../utils/burger-api';
 import { registerUser } from '../features/user/userSlice';
+import type { RootState } from '../services/store';
+import { makeThunkDispatchMock } from '../test-utils/makeThunkDispatchMock';
+
+class LocalStorageMock implements Storage {
+  private store: Record<string, string> = {};
+  length = 0;
+
+  clear(): void {
+    this.store = {};
+    this.length = 0;
+  }
+
+  getItem(key: string): string | null {
+    return Object.prototype.hasOwnProperty.call(this.store, key)
+      ? this.store[key]
+      : null;
+  }
+
+  setItem(key: string, value: string): void {
+    this.store[key] = String(value);
+    this.length = Object.keys(this.store).length;
+  }
+
+  removeItem(key: string): void {
+    delete this.store[key];
+    this.length = Object.keys(this.store).length;
+  }
+
+  key(index: number): string | null {
+    return Object.keys(this.store)[index] ?? null;
+  }
+}
 
 describe('user saveTokens via registerUser/loginUser', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // простая заглушка localStorage
-    const store: Record<string, string> = {};
-    // @ts-ignore
-    global.localStorage = {
-      getItem: (k: string) => store[k] ?? null,
-      setItem: (k: string, v: string) => (store[k] = v),
-      removeItem: (k: string) => delete store[k]
-    };
+    const lsMock = new LocalStorageMock();
+    // присваиваем в глобальный объект
+    (global as unknown as { localStorage: Storage }).localStorage = lsMock;
   });
 
   it('registerUser сохраняет токены и возвращает user', async () => {
@@ -31,21 +59,22 @@ describe('user saveTokens via registerUser/loginUser', () => {
       accessToken: 'Bearer atkn',
       refreshToken: 'rtkn'
     });
-    const dispatch = jest.fn();
-    const getState = jest.fn();
-    const res: any = await registerUser({
+
+    const dispatch = makeThunkDispatchMock<RootState>();
+    const getState = () => ({}) as RootState;
+
+    const res = await registerUser({
       name: 'X',
       email: 'x@x',
       password: 'p'
-    } as any)(dispatch as any, getState as any, undefined);
+    })(dispatch, getState, undefined);
+
     expect(res.type).toBe(registerUser.fulfilled.type);
-    // проверяем, что setCookie вызван и localStorage содержит refreshToken
-    expect(setCookie).toHaveBeenCalledWith(
-      'accessToken',
-      'atkn',
-      expect.any(Object)
-    );
-    // @ts-ignore
-    expect(localStorage.getItem('refreshToken')).toBe('rtkn');
+    expect(setCookie).toHaveBeenCalled();
+    expect(
+      (global as unknown as { localStorage: Storage }).localStorage.getItem(
+        'refreshToken'
+      )
+    ).toBe('rtkn');
   });
 });

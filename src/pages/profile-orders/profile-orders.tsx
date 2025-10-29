@@ -6,10 +6,13 @@ import {
   wsDisconnect
 } from '../../features/profileOrders/profileOrdersSlice';
 import { getCookie } from '../../utils/cookie';
+import type { TOrder } from '@utils-types';
 
 export const ProfileOrders: FC = () => {
   const dispatch = useDispatch();
-  const orders = useSelector((state: any) => state.profileOrders.orders);
+  const orders: TOrder[] = useSelector(
+    (state) => state.profileOrders.orders ?? []
+  );
   // получаем токен из cookie (или null)
   const token = getCookie('accessToken') || null;
 

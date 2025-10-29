@@ -1,11 +1,12 @@
+import { Action } from 'redux';
 import reducer, { fetchFeed } from '../features/feed/feedSlice';
+import type { TOrder } from '../utils/types';
 
 describe('feed slice', () => {
-  const initial = reducer(undefined, { type: '@@INIT' } as any);
+  const initial = reducer(undefined, { type: '@@INIT' } as Action);
 
   afterEach(() => {
-    // сброс мока fetch
-    (global as any).fetch = undefined;
+    (global as unknown as Record<string, unknown>).fetch = undefined;
     jest.restoreAllMocks();
   });
 
@@ -19,20 +20,24 @@ describe('feed slice', () => {
   });
 
   it('fetchFeed.pending ставит isLoading = true и очищает error', () => {
-    const action = fetchFeed.pending('req', undefined);
-    const next = reducer(undefined, action);
+    const pendingAction: ReturnType<typeof fetchFeed.pending> =
+      fetchFeed.pending('req', undefined);
+    const next = reducer(undefined, pendingAction as unknown as Action);
     expect(next.isLoading).toBe(true);
     expect(next.error).toBeNull();
   });
 
   it('fetchFeed.fulfilled сохраняет orders, total, totalToday и сбрасывает isLoading', () => {
-    const payload = {
-      orders: [{ _id: 'o1' }, { _id: 'o2' }],
+    const payload: { orders: TOrder[]; total: number; totalToday: number } = {
+      orders: [{ _id: 'o1' } as TOrder, { _id: 'o2' } as TOrder],
       total: 10,
       totalToday: 2
-    } as any;
-    const action = fetchFeed.fulfilled(payload, 'req', undefined);
-    const next = reducer(undefined, action);
+    };
+
+    const fulfilledAction: ReturnType<typeof fetchFeed.fulfilled> =
+      fetchFeed.fulfilled(payload, 'req', undefined);
+
+    const next = reducer(undefined, fulfilledAction as unknown as Action);
     expect(next.isLoading).toBe(false);
     expect(next.orders).toEqual(payload.orders);
     expect(next.total).toBe(10);
@@ -40,11 +45,12 @@ describe('feed slice', () => {
   });
 
   it('fetchFeed.rejected записывает ошибку и сбрасывает isLoading', () => {
-    const action = {
-      type: fetchFeed.rejected.type,
-      error: { message: 'network' }
-    } as any;
-    const next = reducer(undefined, action);
+    const error = new Error('network');
+
+    const rejectedAction: ReturnType<typeof fetchFeed.rejected> =
+      fetchFeed.rejected(error, 'req', undefined);
+
+    const next = reducer(undefined, rejectedAction as unknown as Action);
     expect(next.isLoading).toBe(false);
     expect(next.error).toBe('network');
   });

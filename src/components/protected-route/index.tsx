@@ -1,3 +1,4 @@
+import React, { FC } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useSelector } from '../../services/store';
 import { Preloader } from '../ui/preloader';
@@ -7,12 +8,13 @@ interface ProtectedRouteProps {
   onlyUnAuth?: boolean;
 }
 
-export const ProtectedRoute = ({
+export const ProtectedRoute: FC<ProtectedRouteProps> = ({
   element,
   onlyUnAuth = false
-}: ProtectedRouteProps) => {
-  const user = useSelector((state: any) => state.user.user);
-  const isUserLoaded = useSelector((state: any) => state.user.isUserLoaded);
+}) => {
+  // useSelector уже типизирован в services/store как TypedUseSelectorHook<RootState>
+  const user = useSelector((state) => state.user.user);
+  const isUserLoaded = useSelector((state) => state.user.isUserLoaded);
   const location = useLocation();
 
   // Пока не знаем, авторизован ли пользователь — показываем прелоадер
@@ -33,3 +35,5 @@ export const ProtectedRoute = ({
   // Всё ок — рендерим страницу
   return element;
 };
+
+export default ProtectedRoute;
