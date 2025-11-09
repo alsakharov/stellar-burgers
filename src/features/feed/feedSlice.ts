@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { TOrder } from '@utils-types';
 
 export const fetchFeed = createAsyncThunk('feed/fetchFeed', async () => {
-  const res = await fetch('https://norma.nomoreparties.space/api/orders/all');
+  const res = await fetch('https://norma.education-services.ru/api/orders/all');
   if (!res.ok) throw new Error('Ошибка загрузки заказов');
   return await res.json();
 });

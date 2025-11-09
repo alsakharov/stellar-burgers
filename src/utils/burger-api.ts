@@ -2,7 +2,7 @@ import { setCookie, getCookie } from './cookie';
 import { TIngredient, TOrder, TOrdersData, TUser } from './types';
 
 const URL =
-  process.env.BURGER_API_URL || 'https://norma.nomoreparties.space/api';
+  process.env.BURGER_API_URL || 'https://norma.education-services.ru/api';
 
 const checkResponse = <T>(res: Response): Promise<T> =>
   res.ok ? res.json() : res.json().then((err) => Promise.reject(err));
@@ -16,6 +16,8 @@ type TRefreshResponse = TServerResponse<{
   accessToken: string;
 }>;
 
+// Приводим формат отправки Authorization к единому виду: всегда "Bearer <token>".
+// Храним в cookie/LS чистый токен (без "Bearer "), поэтому здесь добавляем префикс.
 export const refreshToken = (): Promise<TRefreshResponse> =>
   fetch(`${URL}/auth/token`, {
     method: 'POST',
@@ -32,7 +34,7 @@ export const refreshToken = (): Promise<TRefreshResponse> =>
         return Promise.reject(refreshData);
       }
       localStorage.setItem('refreshToken', refreshData.refreshToken);
-      setCookie('accessToken', refreshData.accessToken);
+      setCookie('accessToken', refreshData.accessToken); // сохраняем чистый токен
       return refreshData;
     });
 
@@ -47,8 +49,9 @@ export const fetchWithRefresh = async <T>(
     if ((err as { message: string }).message === 'jwt expired') {
       const refreshData = await refreshToken();
       if (options.headers) {
+        // при повторной попытке ставим "Bearer <token>"
         (options.headers as { [key: string]: string }).authorization =
-          refreshData.accessToken;
+          `Bearer ${refreshData.accessToken}`;
       }
       const res = await fetch(url, options);
       return await checkResponse<T>(res);
@@ -93,7 +96,7 @@ export const getOrdersApi = () =>
     method: 'GET',
     headers: {
       'Content-Type': 'application/json;charset=utf-8',
-      authorization: getCookie('accessToken')
+      authorization: `Bearer ${getCookie('accessToken') || ''}`
     } as HeadersInit
   }).then((data) => {
     if (data?.success) return data.orders;
@@ -110,7 +113,7 @@ export const orderBurgerApi = (data: string[]) =>
     method: 'POST',
     headers: {
       'Content-Type': 'application/json;charset=utf-8',
-      authorization: `Bearer ${getCookie('accessToken')}` // <-- Исправлено!
+      authorization: `Bearer ${getCookie('accessToken') || ''}`
     } as HeadersInit,
     body: JSON.stringify({
       ingredients: data
@@ -210,7 +213,7 @@ type TUserResponse = TServerResponse<{ user: TUser }>;
 export const getUserApi = () =>
   fetchWithRefresh<TUserResponse>(`${URL}/auth/user`, {
     headers: {
-      authorization: getCookie('accessToken')
+      authorization: `Bearer ${getCookie('accessToken') || ''}`
     } as HeadersInit
   });
 
@@ -219,7 +222,7 @@ export const updateUserApi = (user: Partial<TRegisterData>) =>
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json;charset=utf-8',
-      authorization: getCookie('accessToken')
+      authorization: `Bearer ${getCookie('accessToken') || ''}`
     } as HeadersInit,
     body: JSON.stringify(user)
   });

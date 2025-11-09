@@ -14,8 +14,46 @@ export const BurgerIngredientUI: FC<TBurgerIngredientUIProps> = memo(
   ({ ingredient, count, handleAdd, locationState }) => {
     const { image, price, name, _id } = ingredient;
 
+    const genUid = () =>
+      `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+    const onDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+      try {
+        const uid = genUid();
+        const payload = { ...ingredient, __dragUid: uid };
+        const json = JSON.stringify(payload);
+        // основной payload
+        e.dataTransfer.setData('application/json', json);
+        // fallback и uid
+        e.dataTransfer.setData('text/plain', json);
+        e.dataTransfer.setData('text/uid', uid);
+        e.dataTransfer.effectAllowed = 'copy';
+      } catch {
+        // noop
+      }
+    };
+
+    const onAddClick = (e?: React.SyntheticEvent) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      try {
+        if (typeof handleAdd === 'function') {
+          (handleAdd as unknown as () => void)();
+        }
+      } catch {
+        // noop
+      }
+    };
+
     return (
-      <div className={styles.container}>
+      <div
+        className={styles.container}
+        draggable
+        onDragStart={onDragStart}
+        data-cy={`ingredient-item-${_id}`}
+      >
         <Link
           className={styles.article}
           to={`/ingredients/${_id}`}
@@ -31,8 +69,9 @@ export const BurgerIngredientUI: FC<TBurgerIngredientUIProps> = memo(
         </Link>
         <AddButton
           text='Добавить'
-          onClick={handleAdd}
+          onClick={onAddClick}
           extraClass={`${styles.addButton} mt-8`}
+          data-cy={`ingredient-add-${_id}`}
         />
       </div>
     );

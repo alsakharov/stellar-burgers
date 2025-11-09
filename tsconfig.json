@@ -14,6 +14,8 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
     "jsx": "react-jsx",
     "types": ["node", "jest"],
     "baseUrl": ".",
@@ -28,5 +30,6 @@
       "@selectors": ["src/services/selectors"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "build"]
 }

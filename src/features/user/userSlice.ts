@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { fetchWithRefresh } from '../../utils/burger-api';
 import { setCookie, deleteCookie, getCookie } from '../../utils/cookie';
 
-const URL = 'https://norma.nomoreparties.space/api';
+const URL = 'https://norma.education-services.ru/api';
 
 interface User {
   name: string;
@@ -52,69 +52,72 @@ function saveTokens(accessToken: string, refreshToken: string) {
   localStorage.setItem('refreshToken', refreshToken);
 }
 
-export const registerUser = createAsyncThunk(
-  'user/registerUser',
-  async (data: { name: string; email: string; password: string }, thunkAPI) => {
-    try {
-      const res = (await fetchWithRefresh(`${URL}/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-      })) as RegisterUserResponse;
-      saveTokens(res.accessToken, res.refreshToken);
-      return res.user;
-    } catch (err: any) {
-      return thunkAPI.rejectWithValue(err.message);
-    }
-  }
-);
+const extractErrorMessage = (err: unknown): string =>
+  err instanceof Error ? err.message : String(err ?? 'Unknown error');
 
-export const loginUser = createAsyncThunk(
-  'user/loginUser',
-  async (data: { email: string; password: string }, thunkAPI) => {
-    try {
-      const res = (await fetchWithRefresh(`${URL}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-      })) as LoginUserResponse;
-      saveTokens(res.accessToken, res.refreshToken);
-      return res.user;
-    } catch (err: any) {
-      return thunkAPI.rejectWithValue(err.message);
-    }
+export const registerUser = createAsyncThunk<
+  User,
+  { name: string; email: string; password: string },
+  { rejectValue: string }
+>('user/registerUser', async (data, thunkAPI) => {
+  try {
+    const res = (await fetchWithRefresh(`${URL}/auth/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    })) as RegisterUserResponse;
+    saveTokens(res.accessToken, res.refreshToken);
+    return res.user;
+  } catch (err: unknown) {
+    return thunkAPI.rejectWithValue(extractErrorMessage(err));
   }
-);
+});
 
-export const updateUser = createAsyncThunk(
-  'user/updateUser',
-  async (
-    data: { name?: string; email?: string; password?: string },
-    thunkAPI
-  ) => {
-    try {
-      const accessToken = getCookie('accessToken');
-      const res = (await fetchWithRefresh(`${URL}/auth/user`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          authorization: accessToken ? `Bearer ${accessToken}` : ''
-        },
-        body: JSON.stringify(data)
-      })) as UpdateUserResponse;
-      return res.user;
-    } catch (err: any) {
-      return thunkAPI.rejectWithValue(err.message);
-    }
+export const loginUser = createAsyncThunk<
+  User,
+  { email: string; password: string },
+  { rejectValue: string }
+>('user/loginUser', async (data, thunkAPI) => {
+  try {
+    const res = (await fetchWithRefresh(`${URL}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    })) as LoginUserResponse;
+    saveTokens(res.accessToken, res.refreshToken);
+    return res.user;
+  } catch (err: unknown) {
+    return thunkAPI.rejectWithValue(extractErrorMessage(err));
   }
-);
+});
+
+export const updateUser = createAsyncThunk<
+  User,
+  { name?: string; email?: string; password?: string },
+  { rejectValue: string }
+>('user/updateUser', async (data, thunkAPI) => {
+  try {
+    const accessToken = getCookie('accessToken');
+    const res = (await fetchWithRefresh(`${URL}/auth/user`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        authorization: accessToken ? `Bearer ${accessToken}` : ''
+      },
+      body: JSON.stringify(data)
+    })) as UpdateUserResponse;
+    return res.user;
+  } catch (err: unknown) {
+    return thunkAPI.rejectWithValue(extractErrorMessage(err));
+  }
+});
 
 // Thunk для получения пользователя с обработкой 403 и отсутствия токена
-export const fetchUser = createAsyncThunk(
+export const fetchUser = createAsyncThunk<User, void, { rejectValue: string }>(
   'user/fetchUser',
   async (_, thunkAPI) => {
     const accessToken = getCookie('accessToken');
@@ -124,7 +127,7 @@ export const fetchUser = createAsyncThunk(
       accessToken === 'null' ||
       accessToken === ''
     ) {
-      // Нет токена — не делаем запрос, возвращаем ошибку или null
+      // Нет токена — не делаем запрос, возвращаем ошибку
       return thunkAPI.rejectWithValue('Нет токена');
     }
     try {
@@ -136,7 +139,8 @@ export const fetchUser = createAsyncThunk(
         }
       })) as { user: User };
       return res.user;
-    } catch (err: any) {
+    } catch (err: unknown) {
+      // безопасно извлекаем сообщение
       thunkAPI.dispatch(logout());
       return thunkAPI.rejectWithValue('Сессия истекла, войдите снова');
     }
@@ -174,7 +178,7 @@ const userSlice = createSlice({
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload as string;
+        state.error = action.payload ?? extractErrorMessage(action.error);
         state.isUserLoaded = true;
       })
       .addCase(loginUser.pending, (state) => {
@@ -189,7 +193,7 @@ const userSlice = createSlice({
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload as string;
+        state.error = action.payload ?? extractErrorMessage(action.error);
         state.isUserLoaded = true;
       })
       .addCase(updateUser.pending, (state) => {
@@ -203,7 +207,7 @@ const userSlice = createSlice({
       })
       .addCase(updateUser.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload as string;
+        state.error = action.payload ?? extractErrorMessage(action.error);
         state.isUserLoaded = true;
       })
       .addCase(fetchUser.pending, (state) => {
@@ -218,7 +222,7 @@ const userSlice = createSlice({
       })
       .addCase(fetchUser.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload as string;
+        state.error = action.payload ?? extractErrorMessage(action.error);
         state.user = null;
         state.isUserLoaded = true;
       });

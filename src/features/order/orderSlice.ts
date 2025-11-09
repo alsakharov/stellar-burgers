@@ -1,22 +1,53 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { orderBurgerApi } from '../../utils/burger-api';
+import { clearConstructor } from '../constructorItems/constructorItemsSlice';
+import { resetCounts } from '../ingredients/ingredientsSlice';
+import type { TOrder } from '../../utils/types';
 
-export const createOrder = createAsyncThunk(
-  'order/createOrder',
-  async (ingredients: string[], thunkAPI) => {
+type CreateOrderResponse = {
+  success: boolean;
+  order: TOrder;
+  name?: string;
+};
+
+/**
+ * createOrder:
+ * - Возвращает CreateOrderResponse (включая поле order),
+ * - В случае rejectWithValue передаём строку (сообщение ошибки).
+ */
+export const createOrder = createAsyncThunk<
+  CreateOrderResponse,
+  string[],
+  { rejectValue: string }
+>('order/createOrder', async (ingredients: string[], thunkAPI) => {
+  try {
+    const response = await orderBurgerApi(ingredients);
+
+    // Очистка конструктора и сброс счётчиков ингредиентов (best-effort)
     try {
-      const response = await orderBurgerApi(ingredients);
-
-      return response;
-    } catch (error: any) {
-      return thunkAPI.rejectWithValue(error.message || 'Ошибка заказа');
+      thunkAPI.dispatch(clearConstructor());
+      thunkAPI.dispatch(resetCounts());
+    } catch {
+      // noop
     }
+
+    return response as CreateOrderResponse;
+  } catch (error: unknown) {
+    // Корректно извлекаем строковое сообщение из unknown
+    let message = 'Ошибка заказа';
+    if (error instanceof Error && typeof error.message === 'string') {
+      message = error.message;
+    } else {
+      message = String(error ?? message);
+    }
+    return thunkAPI.rejectWithValue(message);
   }
-);
+});
 
 interface OrderState {
   orderRequest: boolean;
-  orderModalData: any;
+  // либо успешный ответ с полем `order`, либо объект ошибки, либо null
+  orderModalData: CreateOrderResponse | { error: string } | null;
 }
 
 const initialState: OrderState = {
@@ -30,6 +61,7 @@ const orderSlice = createSlice({
   reducers: {
     closeOrderModal(state) {
       state.orderModalData = null;
+      state.orderRequest = false;
     }
   },
   extraReducers: (builder) => {
@@ -40,11 +72,13 @@ const orderSlice = createSlice({
       })
       .addCase(createOrder.fulfilled, (state, action) => {
         state.orderRequest = false;
+        // action.payload типизирован как CreateOrderResponse
         state.orderModalData = action.payload;
       })
       .addCase(createOrder.rejected, (state, action) => {
         state.orderRequest = false;
-        state.orderModalData = { error: action.payload };
+        // action.payload может быть string | undefined
+        state.orderModalData = { error: action.payload ?? 'Ошибка заказа' };
       });
   }
 });
